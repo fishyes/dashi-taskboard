@@ -14,7 +14,7 @@ const embeddedHost = await readFile(new URL("../web/src/embeddedHost.mjs", impor
 
 test("injection is an idempotent IIFE guarded by its current source hash", () => {
   assert.match(source, /^\(\(\) => \{/);
-  assert.match(source, /const VERSION = "0\.6\.13"/);
+  assert.match(source, /const VERSION = "0\.6\.15"/);
   assert.match(source, /const SOURCE_HASH = window\.__CODEX_TASKBOARD_SOURCE_HASH__/);
   assert.match(source, /const SENTINEL_KEY = "__codexTaskboardInjection__"/);
   assert.match(source, /previous\?\.sourceHash === SOURCE_HASH/);
@@ -37,7 +37,7 @@ test("embedded page uses the launcher URL inside an opaque sandbox", () => {
 });
 
 test("entry clones the native Plugins row and the page covers the complete Codex workspace", () => {
-  assert.match(source, /const PLUGIN_LABELS = \["插件", "plugins"\]/);
+  assert.match(source, /const PLUGIN_LABELS = \["插件", "外掛程式", "plugins"\]/);
   assert.match(source, /if \(siblings\.length >= 3\) return plugin;/);
   assert.match(source, /return directButtons\.length >= 3/);
   assert.match(source, /const button = reference\.cloneNode\(true\)/);
@@ -62,6 +62,17 @@ test("opening Taskboard suppresses native selection and contextual header until 
   assert.match(source, /restoreNativeSelection\(\)/);
   assert.match(source, /function onDocumentClick[\s\S]*closeTaskboard\(false\);/);
   assert.doesNotMatch(source, /setTimeout\(\(\) => closeTaskboard\(false\), 0\)/);
+});
+
+test("Traditional Chinese native sidebar pages close the Taskboard before navigation", () => {
+  const labelsSource = source.slice(
+    source.indexOf("const NATIVE_PAGE_LABELS"),
+    source.indexOf("const PROJECT_SECTION_LABELS"),
+  );
+  for (const label of ["新聊天", "pull request", "網站", "已排程", "外掛程式"]) {
+    assert.match(labelsSource, new RegExp(`"${label}"`, "i"));
+  }
+  assert.match(source, /if \(!active \|\| !isNativePageNavigation\(event\.target\)\) return;\s*closeTaskboard\(false\);/);
 });
 
 test("the embedded header fills the native titlebar without clipping or a full-page no-drag region", () => {

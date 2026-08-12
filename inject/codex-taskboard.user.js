@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "0.6.13";
+  const VERSION = "0.6.15";
   const SOURCE_HASH = window.__CODEX_TASKBOARD_SOURCE_HASH__;
   const SENTINEL_KEY = "__codexTaskboardInjection__";
   const DEFAULT_TASKBOARD_URL = "http://127.0.0.1:47823/?host=codex";
@@ -28,19 +28,24 @@
   const HOST_HEARTBEAT_MAX_AGE_MS = 8_000;
   const MACOS_TITLEBAR_SAFE_LEFT = 80;
   const FRAME_REFRESH_PARAM = "__codex_taskboard_refresh";
-  const PLUGIN_LABELS = ["插件", "plugins"];
+  const PLUGIN_LABELS = ["插件", "外掛程式", "plugins"];
   const NATIVE_PAGE_LABELS = [
     "新建任务",
     "新对话",
+    "新聊天",
     "new task",
     "new chat",
     "拉取请求",
+    "pull request",
     "pull requests",
     "站点",
+    "網站",
     "sites",
     "已安排",
+    "已排程",
     "scheduled",
     "插件",
+    "外掛程式",
     "plugins",
   ];
   const PROJECT_SECTION_LABELS = ["projects", "项目"];
