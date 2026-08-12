@@ -25,7 +25,7 @@ import type {
 const DEFAULT_USER_ACTOR: ActorIdentity = {
   type: "user",
   id: "local-user",
-  name: "本地用户",
+  name: "本機使用者",
   avatarUrl: null,
 };
 
@@ -54,7 +54,7 @@ export class ApiError extends Error {
   readonly details?: unknown;
 
   constructor(status: number, body: ApiErrorBody) {
-    super(body.error?.message ?? apiText(`请求失败（${status}）`, `Request failed (${status})`));
+    super(body.error?.message ?? apiText(`請求失敗（${status}）`, `Request failed (${status})`));
     this.name = "ApiError";
     this.status = status;
     this.code = body.error?.code ?? "REQUEST_FAILED";
@@ -87,7 +87,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       error: {
         code: "SERVICE_UNAVAILABLE",
         message: apiText(
-          "无法连接本地 Taskboard 服务，请重新通过 Taskboard 启动 Codex。",
+          "無法連線本機 Taskboard 服務，請重新透過 Taskboard 啟動 Codex。",
           "Could not connect to the local Taskboard service. Start Codex from Taskboard again.",
         ),
       },

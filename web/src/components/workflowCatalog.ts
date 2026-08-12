@@ -16,14 +16,14 @@ import { workflowText, type WorkflowText } from "./workflowI18n";
 export { WORKFLOW_TRIGGER_KINDS, isWorkflowTriggerKind } from "../../../shared/workflow-control-flow.mjs";
 
 export type WorkflowGroup =
-  | "触发器"
+  | "觸發器"
   | "流程控制"
   | "Skill 和 MCP"
   | "API"
-  | "第三方集成"
-  | "开发"
-  | "规划"
-  | "结果";
+  | "第三方整合"
+  | "開發"
+  | "規劃"
+  | "結果";
 
 export interface PaletteItem {
   group: WorkflowGroup;
@@ -33,40 +33,40 @@ export interface PaletteItem {
 }
 
 export const WORKFLOW_GROUPS: WorkflowGroup[] = [
-  "触发器",
+  "觸發器",
   "流程控制",
   "Skill 和 MCP",
   "API",
-  "第三方集成",
-  "开发",
-  "规划",
-  "结果",
+  "第三方整合",
+  "開發",
+  "規劃",
+  "結果",
 ];
 
 export const GIT_OPERATIONS = [
-  { value: "status", label: "查看状态" },
+  { value: "status", label: "檢視狀態" },
   { value: "commit", label: "提交更改" },
   { value: "pull", label: "拉取更新" },
   { value: "push", label: "推送分支" },
-  { value: "create-branch", label: "创建分支" },
-  { value: "switch-branch", label: "切换分支" },
-  { value: "merge-branch", label: "合并分支" },
-  { value: "create-worktree", label: "创建 Worktree" },
+  { value: "create-branch", label: "建立分支" },
+  { value: "switch-branch", label: "切換分支" },
+  { value: "merge-branch", label: "合併分支" },
+  { value: "create-worktree", label: "建立 Worktree" },
 ] as const;
 
 export const ISSUE_STATUSES = [
-  { value: "backlog", label: "积压事项" },
-  { value: "todo", label: "待办事项" },
-  { value: "in_progress", label: "进行中" },
-  { value: "in_review", label: "审核中" },
-  { value: "blocked", label: "遇到阻碍" },
+  { value: "backlog", label: "積壓事項" },
+  { value: "todo", label: "待辦事項" },
+  { value: "in_progress", label: "進行中" },
+  { value: "in_review", label: "稽核中" },
+  { value: "blocked", label: "遇到阻礙" },
   { value: "done", label: "完成" },
   { value: "canceled", label: "已取消" },
 ] as const;
 
 export const ISSUE_PRIORITIES = [
-  { value: "none", label: "无优先级" },
-  { value: "urgent", label: "紧急" },
+  { value: "none", label: "無優先順序" },
+  { value: "urgent", label: "緊急" },
   { value: "high", label: "高" },
   { value: "medium", label: "中" },
   { value: "low", label: "低" },
@@ -75,28 +75,28 @@ export const ISSUE_PRIORITIES = [
 export const CONDITION_FIELDS = [
   {
     value: "issue-status",
-    label: "议题状态",
+    label: "議題狀態",
     operators: ["equals", "not-equals"],
     defaultOperator: "equals",
     defaultValue: "todo",
   },
   {
     value: "issue-priority",
-    label: "议题优先级",
+    label: "議題優先順序",
     operators: ["equals", "not-equals"],
     defaultOperator: "equals",
     defaultValue: "none",
   },
   {
     value: "issue-labels",
-    label: "议题标签",
+    label: "議題標籤",
     operators: ["contains", "not-contains"],
     defaultOperator: "contains",
     defaultValue: "",
   },
   {
     value: "upstream-output",
-    label: "上游节点输出",
+    label: "上游節點輸出",
     operators: ["equals", "not-equals", "contains", "not-contains"],
     defaultOperator: "equals",
     defaultValue: "",
@@ -104,16 +104,16 @@ export const CONDITION_FIELDS = [
 ] as const;
 
 export const CONDITION_OPERATORS = [
-  { value: "equals", label: "等于" },
-  { value: "not-equals", label: "不等于" },
+  { value: "equals", label: "等於" },
+  { value: "not-equals", label: "不等於" },
   { value: "contains", label: "包含" },
   { value: "not-contains", label: "不包含" },
 ] as const;
 
 export const FEISHU_MESSAGE_RECIPIENTS = [
-  { value: "self", label: "发送给自己" },
-  { value: "user", label: "发送给特定用户" },
-  { value: "chat", label: "发送到群聊" },
+  { value: "self", label: "傳送給自己" },
+  { value: "user", label: "傳送給特定使用者" },
+  { value: "chat", label: "傳送到群聊" },
 ] as const;
 
 export const CODE_RUNTIMES = [
@@ -123,9 +123,9 @@ export const CODE_RUNTIMES = [
 ] as const;
 
 export const TEST_SCOPES = [
-  { value: "related", label: "相关测试" },
-  { value: "all", label: "全部测试" },
-  { value: "custom", label: "自定义命令" },
+  { value: "related", label: "相關測試" },
+  { value: "all", label: "全部測試" },
+  { value: "custom", label: "自訂命令" },
 ] as const;
 
 const FEISHU_LOGO = "https://p1-hera.feishucdn.com/tos-cn-i-jbbdkfciu3/84a9f036fe2b44f99b899fff4beeb963~tplv-jbbdkfciu3-image:0:0.image";
@@ -133,97 +133,97 @@ const GIT_LOGO = "https://git-scm.com/images/logos/downloads/Git-Icon-1788C.svg"
 
 export const PALETTE_ITEMS: PaletteItem[] = [
   {
-    group: "触发器",
+    group: "觸發器",
     title: "Issue",
-    description: "当议题变化时启动流程",
+    description: "當議題變化時啟動流程",
     data: {
       kind: "issue-trigger",
       eyebrow: "ISSUE TRIGGER",
-      title: "议题触发器",
-      description: "当议题满足条件时启动",
-      meta: "状态、标签或优先级",
+      title: "議題觸發器",
+      description: "當議題滿足條件時啟動",
+      meta: "狀態、標籤或優先順序",
       icon: "myIssues",
       tone: "issue",
-      outputLabel: "议题",
+      outputLabel: "議題",
       triggerStatus: "todo",
     },
   },
   {
-    group: "触发器",
-    title: "RSS 订阅更新",
-    description: "RSS 订阅发布新内容时启动流程",
+    group: "觸發器",
+    title: "RSS 訂閱更新",
+    description: "RSS 訂閱釋出新內容時啟動流程",
     data: {
       kind: "rss-trigger",
       eyebrow: "RSS TRIGGER",
-      title: "RSS 订阅更新",
-      description: "指定的 RSS 订阅发布新内容时触发",
-      meta: "尚未设置 RSS 订阅地址",
+      title: "RSS 訂閱更新",
+      description: "指定的 RSS 訂閱釋出新內容時觸發",
+      meta: "尚未設定 RSS 訂閱位址",
       icon: "recurrence",
       tone: "issue",
-      outputLabel: "订阅条目",
+      outputLabel: "訂閱條目",
       rssFeedUrl: "",
     },
   },
   {
-    group: "触发器",
+    group: "觸發器",
     title: "PR 提交",
-    description: "当前项目仓库提交 PR 时启动流程",
+    description: "目前專案儲存庫提交 PR 時啟動流程",
     data: {
       kind: "pull-request-submitted-trigger",
       eyebrow: "PR TRIGGER",
       title: "PR 提交",
-      description: "当前项目仓库提交新的 Pull Request 时触发",
-      meta: "当前项目仓库 · Pull Request",
+      description: "目前專案儲存庫提交新的 Pull Request 時觸發",
+      meta: "目前專案儲存庫 · Pull Request",
       icon: "branch",
       tone: "issue",
       outputLabel: "Pull Request",
     },
   },
   {
-    group: "触发器",
+    group: "觸發器",
     title: "Issue 提交",
-    description: "当前项目仓库提交 Issue 时启动流程",
+    description: "目前專案儲存庫提交 Issue 時啟動流程",
     data: {
       kind: "repository-issue-submitted-trigger",
       eyebrow: "ISSUE TRIGGER",
       title: "Issue 提交",
-      description: "当前项目仓库提交新的 Issue 时触发",
-      meta: "当前项目仓库 · Issue",
+      description: "目前專案儲存庫提交新的 Issue 時觸發",
+      meta: "目前專案儲存庫 · Issue",
       icon: "createIssue",
       tone: "issue",
       outputLabel: "Issue",
     },
   },
   {
-    group: "触发器",
-    title: "Git 状态",
-    description: "当前项目的 Git 工作区状态变化时启动流程",
+    group: "觸發器",
+    title: "Git 狀態",
+    description: "目前專案的 Git 工作區狀態變化時啟動流程",
     data: {
       kind: "git-status-trigger",
       eyebrow: "GIT TRIGGER",
-      title: "Git 状态",
-      description: "当前项目的 Git 工作区状态发生变化时触发",
-      meta: "当前项目 · Git 工作区",
+      title: "Git 狀態",
+      description: "目前專案的 Git 工作區狀態發生變化時觸發",
+      meta: "目前專案 · Git 工作區",
       icon: "branch",
       logo: GIT_LOGO,
       tone: "issue",
-      outputLabel: "Git 状态",
+      outputLabel: "Git 狀態",
     },
   },
   {
     group: "流程控制",
-    title: "条件判断",
-    description: "根据判断结果进入对应路径",
+    title: "條件判斷",
+    description: "根據判斷結果進入對應路徑",
     data: {
       kind: "condition",
       eyebrow: "CONDITION",
-      title: "条件判断",
-      description: "根据判断结果进入对应路径",
-      meta: "配置一个判断规则",
+      title: "條件判斷",
+      description: "根據判斷結果進入對應路徑",
+      meta: "設定一個判斷規則",
       icon: "filter",
       tone: "planning",
-      inputLabel: "待判断数据",
-      outputLabel: "符合条件的数据",
+      inputLabel: "待判斷資料",
+      outputLabel: "符合條件的資料",
       conditionField: "issue-status",
       conditionOperator: "equals",
       conditionValue: "todo",
@@ -232,154 +232,154 @@ export const PALETTE_ITEMS: PaletteItem[] = [
   {
     group: "Skill 和 MCP",
     title: "Skill",
-    description: "调用已安装的 Skill",
+    description: "呼叫已安裝的 Skill",
     data: {
       kind: "skill",
       eyebrow: "SKILL",
-      title: "调用 Skill",
-      description: "运行工作区中的 Skill",
-      meta: "选择一个 Skill",
+      title: "呼叫 Skill",
+      description: "執行工作區中的 Skill",
+      meta: "選擇一個 Skill",
       icon: "file",
       tone: "capability",
       inputLabel: "上下文",
-      outputLabel: "输出",
+      outputLabel: "輸出",
     },
   },
   {
     group: "Skill 和 MCP",
     title: "MCP",
-    description: "调用 MCP 工具或资源",
+    description: "呼叫 MCP 工具或資源",
     data: {
       kind: "mcp",
       eyebrow: "MCP",
-      title: "调用 MCP",
-      description: "连接已配置的 MCP Server",
-      meta: "选择一个 MCP Server",
+      title: "呼叫 MCP",
+      description: "連線已設定的 MCP Server",
+      meta: "選擇一個 MCP Server",
       icon: "panel",
       logo: mcpLogo,
       logoMonochrome: true,
       tone: "capability",
-      inputLabel: "参数",
-      outputLabel: "结果",
+      inputLabel: "參數",
+      outputLabel: "結果",
     },
   },
   {
     group: "API",
-    title: "Nano Banana 生图",
-    description: "调用 Gemini 图像生成能力",
+    title: "Nano Banana 生圖",
+    description: "呼叫 Gemini 影象產生能力",
     data: {
       kind: "nano-banana",
       eyebrow: "IMAGE API",
-      title: "Nano Banana 生图",
-      description: "根据提示词和参考图生成图像",
+      title: "Nano Banana 生圖",
+      description: "根據提示詞和參考圖產生影象",
       meta: "Google Gemini · Image",
       icon: "send",
       logo: geminiLogo,
       tone: "api",
-      inputLabel: "提示词",
-      outputLabel: "图像",
+      inputLabel: "提示詞",
+      outputLabel: "影象",
     },
   },
   {
     group: "API",
-    title: "即梦生图",
-    description: "调用即梦 AI 图片生成",
+    title: "即夢生圖",
+    description: "呼叫即夢 AI 圖片產生",
     data: {
       kind: "jimeng-image",
       eyebrow: "IMAGE API",
-      title: "即梦生图",
-      description: "使用即梦模型生成图片素材",
-      meta: "即梦 AI · Image",
+      title: "即夢生圖",
+      description: "使用即夢模型產生圖片素材",
+      meta: "即夢 AI · Image",
       icon: "send",
       logo: jimengLogo,
       tone: "api",
-      inputLabel: "提示词",
-      outputLabel: "图像",
+      inputLabel: "提示詞",
+      outputLabel: "影象",
     },
   },
   {
     group: "API",
-    title: "Midjourney 生图",
-    description: "提交 Midjourney 生成任务",
+    title: "Midjourney 生圖",
+    description: "提交 Midjourney 產生任務",
     data: {
       kind: "midjourney-image",
       eyebrow: "IMAGE API",
-      title: "Midjourney 生图",
-      description: "通过 Midjourney 生成图片素材",
+      title: "Midjourney 生圖",
+      description: "透過 Midjourney 產生圖片素材",
       meta: "Midjourney · Image",
       icon: "send",
       logo: midjourneyLogo,
       logoMonochrome: true,
       tone: "api",
-      inputLabel: "提示词",
-      outputLabel: "图像",
+      inputLabel: "提示詞",
+      outputLabel: "影象",
     },
   },
   {
     group: "API",
-    title: "Seedance 2.0 生视频",
-    description: "调用字节跳动视频生成模型",
+    title: "Seedance 2.0 生影片",
+    description: "呼叫字節跳動影片產生模型",
     data: {
       kind: "seedance-video",
       eyebrow: "VIDEO API",
-      title: "Seedance 2.0 生视频",
-      description: "生成多模态音视频内容",
+      title: "Seedance 2.0 生影片",
+      description: "產生多模態音影片內容",
       meta: "ByteDance Seed · Video",
       icon: "send",
       logo: bytedanceLogo,
       tone: "api",
-      inputLabel: "素材与提示词",
-      outputLabel: "视频",
+      inputLabel: "素材與提示詞",
+      outputLabel: "影片",
     },
   },
   {
     group: "API",
-    title: "可灵生视频",
-    description: "调用可灵 AI 视频生成",
+    title: "可靈生影片",
+    description: "呼叫可靈 AI 影片產生",
     data: {
       kind: "kling-video",
       eyebrow: "VIDEO API",
-      title: "可灵生视频",
-      description: "使用可灵模型生成视频素材",
+      title: "可靈生影片",
+      description: "使用可靈模型產生影片素材",
       meta: "Kling AI · Video",
       icon: "send",
       logo: klingLogo,
       tone: "api",
-      inputLabel: "素材与提示词",
-      outputLabel: "视频",
+      inputLabel: "素材與提示詞",
+      outputLabel: "影片",
     },
   },
   {
     group: "API",
-    title: "自定义 API 节点",
-    description: "配置任意 HTTP API",
+    title: "自訂 API 節點",
+    description: "設定任意 HTTP API",
     data: {
       kind: "custom-api",
       eyebrow: "HTTP API",
-      title: "自定义 API 节点",
-      description: "调用自定义 HTTP 接口",
+      title: "自訂 API 節點",
+      description: "呼叫自訂 HTTP 介面",
       meta: "GET、POST、PUT",
       icon: "send",
       tone: "api",
-      inputLabel: "请求",
-      outputLabel: "响应",
+      inputLabel: "請求",
+      outputLabel: "回應",
     },
   },
   {
-    group: "第三方集成",
+    group: "第三方整合",
     title: "Git",
-    description: "读取仓库、分支与变更信息",
+    description: "讀取儲存庫、分支與變更資訊",
     data: {
       kind: "git",
       eyebrow: "INTEGRATION",
       title: "Git",
-      description: "读取或操作当前项目的 Git 仓库",
+      description: "讀取或操作目前專案的 Git 儲存庫",
       meta: "Git · Repository",
       icon: "branch",
       logo: GIT_LOGO,
       tone: "integration",
-      inputLabel: "仓库与操作",
-      outputLabel: "Git 结果",
+      inputLabel: "儲存庫與操作",
+      outputLabel: "Git 結果",
       gitOperation: "commit",
       gitCommitMessage: "",
       gitStageAll: true,
@@ -390,264 +390,264 @@ export const PALETTE_ITEMS: PaletteItem[] = [
     },
   },
   {
-    group: "第三方集成",
-    title: "飞书文档",
-    description: "读取或写入飞书云文档",
+    group: "第三方整合",
+    title: "飛書文件",
+    description: "讀取或寫入飛書雲文件",
     data: {
       kind: "feishu-docs",
       eyebrow: "INTEGRATION",
-      title: "飞书文档",
-      description: "连接飞书文档与知识空间",
-      meta: "飞书开放平台 · Docs",
+      title: "飛書文件",
+      description: "連線飛書文件與知識空間",
+      meta: "飛書開放平臺 · Docs",
       icon: "file",
       logo: FEISHU_LOGO,
       tone: "integration",
-      inputLabel: "文档参数",
-      outputLabel: "文档内容",
+      inputLabel: "文件參數",
+      outputLabel: "文件內容",
     },
   },
   {
-    group: "第三方集成",
-    title: "飞书消息",
-    description: "发送消息给自己、用户或群聊",
+    group: "第三方整合",
+    title: "飛書訊息",
+    description: "傳送訊息給自己、使用者或群聊",
     data: {
       kind: "feishu-message",
       eyebrow: "INTEGRATION",
-      title: "飞书消息",
-      description: "通过飞书开放平台发送消息",
-      meta: "飞书开放平台 · IM",
+      title: "飛書訊息",
+      description: "透過飛書開放平臺傳送訊息",
+      meta: "飛書開放平臺 · IM",
       icon: "conversation",
       logo: FEISHU_LOGO,
       tone: "integration",
-      inputLabel: "消息内容",
-      outputLabel: "消息回执",
+      inputLabel: "訊息內容",
+      outputLabel: "訊息傳送結果",
       feishuRecipientType: "self",
       feishuUserId: "",
       feishuChatId: "",
     },
   },
   {
-    group: "第三方集成",
-    title: "发布到 Twitter",
-    description: "将内容发布到 Twitter",
+    group: "第三方整合",
+    title: "釋出到 Twitter",
+    description: "將內容釋出到 Twitter",
     data: {
       kind: "twitter-post",
       eyebrow: "INTEGRATION",
-      title: "发布到 Twitter",
-      description: "将指定内容发布到 Twitter",
-      meta: "尚未填写发布内容",
+      title: "釋出到 Twitter",
+      description: "將指定內容釋出到 Twitter",
+      meta: "尚未填寫釋出內容",
       icon: "send",
       logo: xLogo,
       logoMonochrome: true,
       tone: "integration",
-      inputLabel: "发布内容",
-      outputLabel: "发布结果",
+      inputLabel: "釋出內容",
+      outputLabel: "釋出結果",
       twitterPostContent: "",
     },
   },
   {
-    group: "第三方集成",
+    group: "第三方整合",
     title: "OpenCLI",
-    description: "调用网站适配器和登录态浏览器",
+    description: "呼叫網站介面卡和登入態瀏覽器",
     data: {
       kind: "opencli",
       eyebrow: "INTEGRATION",
       title: "OpenCLI",
-      description: "通过 OpenCLI 操作网站与本地工具",
+      description: "透過 OpenCLI 操作網站與本機工具",
       meta: "OpenCLI · Browser",
       icon: "panel",
       tone: "integration",
       inputLabel: "命令",
-      outputLabel: "执行结果",
+      outputLabel: "執行結果",
     },
   },
   {
-    group: "第三方集成",
-    title: "Claude Design 设计",
-    description: "调用 Claude 生成设计方案",
+    group: "第三方整合",
+    title: "Claude Design 設計",
+    description: "呼叫 Claude 產生設計方案",
     data: {
       kind: "claude-design",
       eyebrow: "INTEGRATION",
-      title: "Claude Design 设计",
-      description: "使用 Claude 完成设计与实现",
+      title: "Claude Design 設計",
+      description: "使用 Claude 完成設計與實現",
       meta: "Claude · Design",
       icon: "write",
       logo: claudeLogo,
       tone: "integration",
-      inputLabel: "设计需求",
-      outputLabel: "设计结果",
+      inputLabel: "設計需求",
+      outputLabel: "設計結果",
     },
   },
   {
-    group: "第三方集成",
+    group: "第三方整合",
     title: "Cloudflare 部署",
-    description: "部署 Workers、Pages 等服务",
+    description: "部署 Workers、Pages 等服務",
     data: {
       kind: "cloudflare-deploy",
       eyebrow: "DEPLOYMENT",
       title: "Cloudflare 部署",
-      description: "构建并部署到 Cloudflare",
+      description: "建置並部署到 Cloudflare",
       meta: "Workers · Pages",
       icon: "send",
       logo: cloudflareLogo,
       tone: "integration",
-      inputLabel: "构建产物",
-      outputLabel: "部署地址",
+      inputLabel: "建置產物",
+      outputLabel: "部署位址",
     },
   },
   {
-    group: "第三方集成",
+    group: "第三方整合",
     title: "Vercel 部署",
-    description: "部署项目并返回预览地址",
+    description: "部署專案並回傳預覽網址",
     data: {
       kind: "vercel-deploy",
       eyebrow: "DEPLOYMENT",
       title: "Vercel 部署",
-      description: "构建并部署到 Vercel",
+      description: "建置並部署到 Vercel",
       meta: "Preview · Production",
       icon: "send",
       logo: vercelLogo,
       logoMonochrome: true,
       tone: "integration",
-      inputLabel: "构建产物",
-      outputLabel: "部署地址",
+      inputLabel: "建置產物",
+      outputLabel: "部署位址",
     },
   },
   {
-    group: "第三方集成",
-    title: "自定义集成",
-    description: "连接其他第三方服务",
+    group: "第三方整合",
+    title: "自訂整合",
+    description: "連線其他第三方服務",
     data: {
       kind: "custom-integration",
       eyebrow: "INTEGRATION",
-      title: "自定义集成",
-      description: "通过授权或 Webhook 连接服务",
+      title: "自訂整合",
+      description: "透過授權或 Webhook 連線服務",
       meta: "OAuth · Webhook",
       icon: "link",
       tone: "integration",
-      inputLabel: "集成参数",
-      outputLabel: "执行结果",
+      inputLabel: "整合參數",
+      outputLabel: "執行結果",
     },
   },
   {
-    group: "开发",
-    title: "自定义代码",
-    description: "使用自定义脚本处理流程数据",
+    group: "開發",
+    title: "自訂程式碼",
+    description: "使用自訂指令碼處理流程資料",
     data: {
       kind: "custom-code",
       eyebrow: "CODE",
-      title: "自定义代码",
-      description: "在当前项目上下文中运行自定义代码",
-      meta: "运行环境 · Shell",
+      title: "自訂程式碼",
+      description: "在目前專案上下文中執行自訂程式碼",
+      meta: "執行環境 · Shell",
       icon: "panel",
       tone: "development",
-      inputLabel: "流程数据",
-      outputLabel: "代码输出",
+      inputLabel: "流程資料",
+      outputLabel: "程式碼輸出",
       codeRuntime: "shell",
       codeContent: "",
     },
   },
   {
-    group: "开发",
-    title: "写测试",
-    description: "根据当前议题和项目上下文编写测试",
+    group: "開發",
+    title: "寫測試",
+    description: "根據目前議題和專案上下文編寫測試",
     data: {
       kind: "write-tests",
       eyebrow: "TEST",
-      title: "写测试",
-      description: "根据当前议题和项目上下文编写测试",
-      meta: "当前项目 · 测试",
+      title: "寫測試",
+      description: "根據目前議題和專案上下文編寫測試",
+      meta: "目前專案 · 測試",
       icon: "write",
       tone: "development",
-      inputLabel: "任务上下文",
-      outputLabel: "测试代码",
+      inputLabel: "任務上下文",
+      outputLabel: "測試程式碼",
     },
   },
   {
-    group: "开发",
-    title: "运行测试",
-    description: "运行相关测试、全部测试或自定义命令",
+    group: "開發",
+    title: "執行測試",
+    description: "執行相關測試、全部測試或自訂命令",
     data: {
       kind: "run-tests",
       eyebrow: "TEST",
-      title: "运行测试",
-      description: "在当前项目中运行测试",
-      meta: "测试范围 · 相关测试",
+      title: "執行測試",
+      description: "在目前專案中執行測試",
+      meta: "測試範圍 · 相關測試",
       icon: "check",
       tone: "development",
-      inputLabel: "项目变更",
-      outputLabel: "测试结果",
+      inputLabel: "專案變更",
+      outputLabel: "測試結果",
       testScope: "related",
       testCommand: "",
     },
   },
   {
-    group: "规划",
-    title: "基础规划",
-    description: "拆解步骤、依赖和验收条件",
+    group: "規劃",
+    title: "基礎規劃",
+    description: "拆解步驟、依賴和驗收條件",
     data: {
       kind: "basic-planning",
       eyebrow: "PLANNING",
-      title: "基础规划",
-      description: "根据议题生成结构化执行计划",
-      meta: "内置规划器",
+      title: "基礎規劃",
+      description: "根據議題產生結構化執行計畫",
+      meta: "內建規劃器",
       icon: "dashboard",
       tone: "planning",
-      inputLabel: "任务上下文",
-      outputLabel: "执行计划",
+      inputLabel: "任務上下文",
+      outputLabel: "執行計畫",
       acceptsChildren: true,
     },
   },
   {
-    group: "规划",
-    title: "Claude Code 规划",
-    description: "使用 Claude Code 生成计划",
+    group: "規劃",
+    title: "Claude Code 規劃",
+    description: "使用 Claude Code 產生計畫",
     data: {
       kind: "claude-code-planning",
       eyebrow: "PLANNING",
-      title: "Claude Code 规划",
-      description: "让 Claude Code 分析并规划任务",
+      title: "Claude Code 規劃",
+      description: "讓 Claude Code 分析並規劃任務",
       meta: "Claude Code · Plan",
       icon: "dashboard",
       logo: claudeCodeLogo,
       tone: "planning",
-      inputLabel: "任务上下文",
-      outputLabel: "执行计划",
+      inputLabel: "任務上下文",
+      outputLabel: "執行計畫",
       claudeModel: "claude-sonnet",
       reasoningEffort: "high",
-      planningRequirements: "分析依赖、风险、执行步骤和验收条件，输出可直接执行的计划。",
+      planningRequirements: "分析依賴、風險、執行步驟和驗收條件，輸出可直接執行的計畫。",
     },
   },
   {
-    group: "规划",
-    title: "自定义规划",
-    description: "通过自定义提示词生成计划",
+    group: "規劃",
+    title: "自訂規劃",
+    description: "透過自訂提示詞產生計畫",
     data: {
       kind: "custom-planning",
       eyebrow: "PLANNING",
-      title: "自定义规划",
-      description: "使用自定义规则拆解任务",
-      meta: "Prompt · 自定义",
+      title: "自訂規劃",
+      description: "使用自訂規則拆解任務",
+      meta: "Prompt · 自訂",
       icon: "write",
       tone: "planning",
-      inputLabel: "任务上下文",
-      outputLabel: "执行计划",
+      inputLabel: "任務上下文",
+      outputLabel: "執行計畫",
     },
   },
   {
-    group: "结果",
-    title: "添加 ISSUE",
-    description: "在当前项目中创建新议题",
+    group: "結果",
+    title: "新增 ISSUE",
+    description: "在目前專案中建立新議題",
     data: {
       kind: "issue-create",
       eyebrow: "ISSUE ACTION",
-      title: "添加 ISSUE",
-      description: "在当前流程所属项目中创建议题",
-      meta: "待填写议题标题",
+      title: "新增 ISSUE",
+      description: "在目前流程所屬專案中建立議題",
+      meta: "待填寫議題標題",
       icon: "createIssue",
       tone: "result",
       inputLabel: "流程上下文",
-      outputLabel: "新议题",
+      outputLabel: "新議題",
       createIssueTitle: "",
       createIssueDescription: "",
       createIssueStatus: "todo",
@@ -656,18 +656,18 @@ export const PALETTE_ITEMS: PaletteItem[] = [
     },
   },
   {
-    group: "结果",
+    group: "結果",
     title: "更新 Issue",
-    description: "回写状态、评论和附件",
+    description: "回寫狀態、評論和附件",
     data: {
       kind: "issue-update",
       eyebrow: "ISSUE ACTION",
-      title: "更新议题",
-      description: "把流程结果写回议题",
-      meta: "状态、评论或附件",
+      title: "更新議題",
+      description: "把流程結果寫回議題",
+      meta: "狀態、評論或附件",
       icon: "write",
       tone: "result",
-      inputLabel: "流程结果",
+      inputLabel: "流程結果",
       outputLabel: "已更新",
       issueTarget: "trigger",
       specificIssueId: "",
@@ -685,40 +685,40 @@ export const PALETTE_ITEMS: PaletteItem[] = [
     },
   },
   {
-    group: "结果",
-    title: "Codex 审核",
-    description: "由 Codex 审核结果和变更",
+    group: "結果",
+    title: "Codex 稽核",
+    description: "由 Codex 稽核結果與變更",
     data: {
       kind: "codex-review",
       eyebrow: "REVIEW",
-      title: "Codex 审核",
-      description: "检查实现结果、测试与验收条件",
+      title: "Codex 稽核",
+      description: "檢查實現結果、測試與驗收條件",
       meta: "Codex · Review",
       icon: "check",
       logo: codexLogo,
       tone: "result",
-      inputLabel: "执行结果",
-      outputLabel: "审核结论",
+      inputLabel: "執行結果",
+      outputLabel: "稽核結論",
     },
   },
   {
-    group: "结果",
-    title: "Claude Code 审核",
-    description: "由 Claude Code 审核结果和变更",
+    group: "結果",
+    title: "Claude Code 稽核",
+    description: "由 Claude Code 稽核結果與變更",
     data: {
       kind: "claude-code-review",
       eyebrow: "REVIEW",
-      title: "Claude Code 审核",
-      description: "使用 Claude Code 复核实现结果",
+      title: "Claude Code 稽核",
+      description: "使用 Claude Code 複核實現結果",
       meta: "Claude Code · Review",
       icon: "check",
       logo: claudeCodeLogo,
       tone: "result",
-      inputLabel: "执行结果",
-      outputLabel: "审核结论",
+      inputLabel: "執行結果",
+      outputLabel: "稽核結論",
       claudeModel: "claude-sonnet",
       reasoningEffort: "high",
-      planningRequirements: "对照执行计划和验收条件复核变更、测试结果与潜在回归。",
+      planningRequirements: "對照執行計畫和驗收條件複核變更、測試結果與潛在迴歸。",
     },
   },
 ];
@@ -728,26 +728,26 @@ const WORKFLOW_NODE_DEFAULT_TEXT: Record<
   Partial<Record<"title" | "description", readonly string[]>>
 > = {
   "basic-planning": {
-    title: ["拆解议题执行计划"],
-    description: ["生成步骤、依赖和验收条件"],
+    title: ["拆解議題執行計畫"],
+    description: ["產生步驟、依賴和驗收條件"],
   },
-  skill: { description: ["运行一个已安装的 Skill"] },
-  mcp: { description: ["连接一个已配置的 MCP Server"] },
+  skill: { description: ["執行一個已安裝的 Skill"] },
+  mcp: { description: ["連線一個已設定的 MCP Server"] },
   "nano-banana": {
-    title: ["生成预览素材"],
-    description: ["根据议题内容生成预览图"],
+    title: ["產生預覽素材"],
+    description: ["根據議題內容產生預覽圖"],
   },
   "cloudflare-deploy": {
-    title: ["部署预览版本"],
-    description: ["构建并发布项目预览"],
+    title: ["部署預覽版本"],
+    description: ["建置並發布專案預覽"],
   },
   "codex-review": {
-    title: ["审核交付结果"],
-    description: ["检查产物、测试与验收条件"],
+    title: ["稽核交付結果"],
+    description: ["檢查產物、測試與驗收條件"],
   },
   "issue-update": {
-    title: ["提交审核"],
-    description: ["追加结果评论并更新状态"],
+    title: ["提交稽核"],
+    description: ["追加結果評論並更新狀態"],
   },
 };
 
@@ -779,49 +779,49 @@ export function capabilityNodeMeta(
     const status = workflowOptionLabel(text, ISSUE_STATUSES, data.createIssueStatus ?? "todo");
     const priority = workflowOptionLabel(text, ISSUE_PRIORITIES, data.createIssuePriority ?? "none");
     return text(
-      `初始状态 · ${optionLabel(ISSUE_STATUSES, data.createIssueStatus ?? "todo")} · 优先级 ${optionLabel(ISSUE_PRIORITIES, data.createIssuePriority ?? "none")}`,
+      `初始狀態 · ${optionLabel(ISSUE_STATUSES, data.createIssueStatus ?? "todo")} · 優先順序 ${optionLabel(ISSUE_PRIORITIES, data.createIssuePriority ?? "none")}`,
       `Initial status · ${status} · Priority ${priority}`,
     );
   }
   if (data.kind === "rss-trigger") {
     const source = rssSourceLabel(data.rssFeedUrl);
-    return source ? `RSS · ${source}` : text("尚未设置 RSS 订阅地址", "RSS feed URL not set");
+    return source ? `RSS · ${source}` : text("尚未設定 RSS 訂閱位址", "RSS feed URL not set");
   }
   if (data.kind === "twitter-post") {
     const content = data.twitterPostContent?.trim();
     return content
-      ? text(`发布内容 · ${twitterPostSummary(content)}`, `Content · ${twitterPostSummary(content)}`)
-      : text("尚未填写发布内容", "Content not set");
+      ? text(`釋出內容 · ${twitterPostSummary(content)}`, `Content · ${twitterPostSummary(content)}`)
+      : text("尚未填寫釋出內容", "Content not set");
   }
   if (data.kind === "custom-code") {
     return text(
-      `运行环境 · ${optionLabel(CODE_RUNTIMES, data.codeRuntime ?? "shell")}`,
+      `執行環境 · ${optionLabel(CODE_RUNTIMES, data.codeRuntime ?? "shell")}`,
       `Runtime · ${workflowOptionLabel(text, CODE_RUNTIMES, data.codeRuntime ?? "shell")}`,
     );
   }
   if (data.kind === "run-tests") {
     return text(
-      `测试范围 · ${optionLabel(TEST_SCOPES, data.testScope ?? "related")}`,
+      `測試範圍 · ${optionLabel(TEST_SCOPES, data.testScope ?? "related")}`,
       `Test scope · ${workflowOptionLabel(text, TEST_SCOPES, data.testScope ?? "related")}`,
     );
   }
   if (data.kind === "skill") {
-    if (!capabilities) return text("正在读取可用 Skill", "Loading available skills");
-    if (failed) return text("无法读取可用 Skill", "Could not load available skills");
+    if (!capabilities) return text("正在讀取可用 Skill", "Loading available skills");
+    if (failed) return text("無法讀取可用 Skill", "Could not load available skills");
     const skill = capabilities.skills.find((option) => option.id === data.selectedSkill);
     if (skill) return `${skill.label} · Skill`;
     return data.selectedSkill
-      ? text("所选 Skill 当前不可用", "Selected skill is unavailable")
-      : text("尚未选择 Skill", "No skill selected");
+      ? text("所選 Skill 目前不可用", "Selected skill is unavailable")
+      : text("尚未選擇 Skill", "No skill selected");
   }
   if (data.kind === "mcp") {
-    if (!capabilities) return text("正在读取可用 MCP Server", "Loading available MCP servers");
-    if (failed) return text("无法读取可用 MCP Server", "Could not load available MCP servers");
+    if (!capabilities) return text("正在讀取可用 MCP Server", "Loading available MCP servers");
+    if (failed) return text("無法讀取可用 MCP Server", "Could not load available MCP servers");
     const server = capabilities.mcpServers.find((option) => option.id === data.selectedMcpServer);
     if (server) return `${server.label} · ${server.transport}`;
     return data.selectedMcpServer
-      ? text("所选 MCP Server 当前不可用", "Selected MCP server is unavailable")
-      : text("尚未选择 MCP Server", "No MCP server selected");
+      ? text("所選 MCP Server 目前不可用", "Selected MCP server is unavailable")
+      : text("尚未選擇 MCP Server", "No MCP server selected");
   }
   return workflowText(text, data.meta);
 }
@@ -878,7 +878,7 @@ export function workflowNodeDisplayDescription(
 ): string {
   if (data.kind === "issue-trigger") {
     const statusValue = data.triggerStatus ?? "todo";
-    const systemDescription = "状态变为「" + optionLabel(ISSUE_STATUSES, statusValue) + "」时触发";
+    const systemDescription = "狀態變為「" + optionLabel(ISSUE_STATUSES, statusValue) + "」時觸發";
     if (data.description === systemDescription) {
       const status = workflowOptionLabel(text, ISSUE_STATUSES, statusValue);
       return text(systemDescription, "Trigger when status changes to ‘" + status + "’");
@@ -935,7 +935,7 @@ export function workflowNodeDisplayTitle(data: WorkflowNodeData, text: WorkflowT
         ? workflowOptionLabel(text, ISSUE_PRIORITIES, value)
         : value;
     return formatActionTitle(displayTitle, [
-      `${workflowText(text, field.label)} ${workflowOptionLabel(text, CONDITION_OPERATORS, operatorValue)} ${valueLabel || text("未设置", "Not set")}`,
+      `${workflowText(text, field.label)} ${workflowOptionLabel(text, CONDITION_OPERATORS, operatorValue)} ${valueLabel || text("未設定", "Not set")}`,
     ], text);
   }
   if (data.kind === "feishu-message") {
@@ -960,26 +960,26 @@ export function workflowNodeDisplayTitle(data: WorkflowNodeData, text: WorkflowT
   }
   if (data.kind === "issue-trigger") {
     const status = workflowOptionLabel(text, ISSUE_STATUSES, data.triggerStatus ?? "todo");
-    return formatActionTitle(displayTitle, [text(`进入${status}`, `Moved to ${status}`)], text);
+    return formatActionTitle(displayTitle, [text(`進入${status}`, `Moved to ${status}`)], text);
   }
   if (data.kind === "issue-update") {
     const actions = [
       data.changeStatus
         ? text(
-            `状态 → ${optionLabel(ISSUE_STATUSES, data.targetStatus ?? "in_review")}`,
+            `狀態 → ${optionLabel(ISSUE_STATUSES, data.targetStatus ?? "in_review")}`,
             `Status → ${workflowOptionLabel(text, ISSUE_STATUSES, data.targetStatus ?? "in_review")}`,
           )
         : "",
-      data.addComment ? text("添加评论", "Add comment") : "",
-      data.addLabels ? text("添加标签", "Add labels") : "",
+      data.addComment ? text("新增評論", "Add comment") : "",
+      data.addLabels ? text("新增標籤", "Add labels") : "",
       data.setPriority
         ? text(
-            `优先级 → ${optionLabel(ISSUE_PRIORITIES, data.targetPriority ?? "none")}`,
+            `優先順序 → ${optionLabel(ISSUE_PRIORITIES, data.targetPriority ?? "none")}`,
             `Priority → ${workflowOptionLabel(text, ISSUE_PRIORITIES, data.targetPriority ?? "none")}`,
           )
         : "",
-      data.attachArtifacts ? text("附加产物", "Attach artifacts") : "",
-      data.recordConversation ? text("记录对话", "Record conversation") : "",
+      data.attachArtifacts ? text("附加產物", "Attach artifacts") : "",
+      data.recordConversation ? text("記錄對話", "Record conversation") : "",
     ].filter(Boolean);
     return formatActionTitle(displayTitle, actions, text);
   }

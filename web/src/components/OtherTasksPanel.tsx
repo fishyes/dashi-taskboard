@@ -19,7 +19,7 @@ function archivedDate(
   if (!value) return "";
   const formatted = new Intl.DateTimeFormat(locale, { month: "numeric", day: "numeric" })
     .format(new Date(value));
-  return text(`${formatted}归档`, `Archived ${formatted}`);
+  return text(`${formatted}歸檔`, `Archived ${formatted}`);
 }
 
 interface ArchivedTaskCardProps {
@@ -57,13 +57,13 @@ function ArchivedTaskCard({
           onClick={() => onRestore(task)}
         >
           <LinearIcon name="recurrence" />
-          {restoring ? text("恢复中…", "Restoring…") : text("恢复", "Restore")}
+          {restoring ? text("恢復中…", "Restoring…") : text("恢復", "Restore")}
         </button>
         <button
           className="archived-task-action archived-task-delete"
           type="button"
-          aria-label={text(`永久删除 ${task.identifier}`, `Permanently delete ${task.identifier}`)}
-          title={text("永久删除", "Delete permanently")}
+          aria-label={text(`永久刪除 ${task.identifier}`, `Permanently delete ${task.identifier}`)}
+          title={text("永久刪除", "Delete permanently")}
           disabled={busy}
           onClick={() => onDelete(task)}
         >
@@ -140,7 +140,7 @@ export function OtherTasksPanel({
   const { language, text } = useTaskboardI18n();
   const archived = activeTab === "archived";
   const activeLabel = archived
-    ? text("已归档", "Archived")
+    ? text("已歸檔", "Archived")
     : taskStatusLabel(language, activeTab);
   const tasks = archived ? archivedTasks : tasksByStatus[activeTab];
   const [dropBeforeTaskId, setDropBeforeTaskId] = useState<string | null | undefined>();
@@ -190,13 +190,13 @@ export function OtherTasksPanel({
     <aside
       className={`other-tasks-panel${open ? " is-open" : ""}`}
       id="other-tasks-panel"
-      aria-label={text("其他任务", "Other issues")}
+      aria-label={text("其他任務", "Other issues")}
       aria-hidden={!open}
     >
-      <div className="other-tasks-tabs" role="tablist" aria-label={text("其他任务状态", "Other issue statuses")}>
+      <div className="other-tasks-tabs" role="tablist" aria-label={text("其他任務狀態", "Other issue statuses")}>
         {OTHER_TASK_TABS.map((tab) => {
           const label = tab === "archived"
-            ? text("已归档", "Archived")
+            ? text("已歸檔", "Archived")
             : taskStatusLabel(language, tab);
           const count = tab === "archived" ? archivedTasks.length : tasksByStatus[tab].length;
           const selected = tab === activeTab;
@@ -213,7 +213,7 @@ export function OtherTasksPanel({
               onClick={() => onTabChange(tab)}
             >
               <span className="other-tasks-tab-label">{label}</span>
-              <span className="other-tasks-tab-count" aria-label={text(`${count} 个议题`, `${count} issues`)}>
+              <span className="other-tasks-tab-count" aria-label={text(`${count} 個議題`, `${count} issues`)}>
                 {count}
               </span>
             </button>
@@ -225,8 +225,8 @@ export function OtherTasksPanel({
         <button
           className="other-tasks-add"
           type="button"
-          aria-label={text(`在${activeLabel}中新建议题`, `Create issue in ${activeLabel}`)}
-          title={text(`添加到${activeLabel}`, `Add to ${activeLabel}`)}
+          aria-label={text(`在${activeLabel}中新增議題`, `Create issue in ${activeLabel}`)}
+          title={text(`新增到${activeLabel}`, `Add to ${activeLabel}`)}
           onClick={() => onCreate(activeTab)}
         >
           <TaskboardIcon name="sidebarAdd" />
@@ -293,14 +293,14 @@ export function OtherTasksPanel({
           <div className="other-tasks-empty">
             <LinearIcon name={hasActiveFilters ? "search" : archived ? "trash" : "panel"} />
             <strong>{hasActiveFilters
-              ? text("当前筛选下无匹配议题", "No issues match the current filters")
-              : text("暂无议题", "No issues")}</strong>
+              ? text("目前篩選下無匹配議題", "No issues match the current filters")
+              : text("暫無議題", "No issues")}</strong>
             <span>
               {hasActiveFilters
-                ? text("搜索和筛选会同步作用于所有状态。", "Search and filters apply to every status.")
+                ? text("搜尋和篩選會同步作用於所有狀態。", "Search and filters apply to every status.")
                 : archived
-                  ? text("没有已归档议题。", "There are no archived issues.")
-                  : text(`没有${activeLabel}。`, `There are no issues in ${activeLabel}.`)}
+                  ? text("沒有已歸檔議題。", "There are no archived issues.")
+                  : text(`沒有${activeLabel}。`, `There are no issues in ${activeLabel}.`)}
             </span>
           </div>
         )}

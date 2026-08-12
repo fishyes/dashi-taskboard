@@ -12,7 +12,7 @@ test("Twitter publishing is a third-party workflow choice with the official tran
   assert.match(catalog, /import xLogo from "\.\.\/assets\/x-logo-black\.png"/);
   assert.match(
     catalog,
-    /group: "第三方集成",[\s\S]*?title: "发布到 Twitter"[\s\S]*?kind: "twitter-post"[\s\S]*?logo: xLogo[\s\S]*?logoMonochrome: true/,
+    /group: "第三方整合",[\s\S]*?title: "釋出到 Twitter"[\s\S]*?kind: "twitter-post"[\s\S]*?logo: xLogo[\s\S]*?logoMonochrome: true/,
   );
   assert.match(picker, /filteredItems\.filter\(\(item\) => item\.group === group\)/);
   assert.match(picker, /<WorkflowMark[\s\S]*?logo=\{item\.data\.logo\}/);
@@ -23,18 +23,18 @@ test("Twitter publishing owns only one shared node-data configuration field", ()
   assert.match(node, /twitterPostContent\?: string/);
   assert.match(
     inspector,
-    /data\.kind === "twitter-post"[\s\S]*?<h2>\{text\("发布到 Twitter", "Post to Twitter"\)\}<\/h2>[\s\S]*?aria-label=\{text\("Twitter 发布内容", "Twitter post content"\)\}[\s\S]*?value=\{data\.twitterPostContent \?\? ""\}[\s\S]*?onChange=\{\(event\) => onChange\(\{ twitterPostContent: event\.target\.value \}\)\}/,
+    /data\.kind === "twitter-post"[\s\S]*?<h2>\{text\("釋出到 Twitter", "Post to Twitter"\)\}<\/h2>[\s\S]*?aria-label=\{text\("Twitter 釋出內容", "Twitter post content"\)\}[\s\S]*?value=\{data\.twitterPostContent \?\? ""\}[\s\S]*?onChange=\{\(event\) => onChange\(\{ twitterPostContent: event\.target\.value \}\)\}/,
   );
   assert.doesNotMatch(
     inspector,
-    /data\.kind === "twitter-post"[\s\S]*?(账号|凭据|回复|线程|媒体上传)/,
+    /data\.kind === "twitter-post"[\s\S]*?(賬號|憑據|回覆|執行緒|媒體上傳)/,
   );
 });
 
 test("Twitter node title, summary and configured state derive from actual post content", () => {
   assert.match(
     catalog,
-    /if \(data\.kind === "twitter-post"\)[\s\S]*?twitterPostContent\?\.trim\(\)[\s\S]*?尚未填写发布内容/,
+    /if \(data\.kind === "twitter-post"\)[\s\S]*?twitterPostContent\?\.trim\(\)[\s\S]*?尚未填寫釋出內容/,
   );
   assert.match(
     catalog,

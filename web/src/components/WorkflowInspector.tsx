@@ -69,8 +69,8 @@ export function WorkflowInspector({
         <button
           className="workflow-panel-toggle"
           type="button"
-          aria-label={text("关闭步骤配置", "Close step settings")}
-          title={text("关闭步骤配置", "Close step settings")}
+          aria-label={text("關閉步驟設定", "Close step settings")}
+          title={text("關閉步驟設定", "Close step settings")}
           onClick={onClose}
         >
           <LinearIcon name="close" />
@@ -80,7 +80,7 @@ export function WorkflowInspector({
       <div
         className="workflow-inspector-tabs"
         role="tablist"
-        aria-label={text("步骤配置视图", "Step settings views")}
+        aria-label={text("步驟設定檢視", "Step settings views")}
       >
         <button
           className={activeTab === "settings" ? "is-active" : ""}
@@ -88,22 +88,22 @@ export function WorkflowInspector({
           role="tab"
           aria-selected={activeTab === "settings"}
           onClick={() => setActiveTab("settings")}
-        >{text("设置", "Settings")}</button>
+        >{text("設定", "Settings")}</button>
         <button
           className={activeTab === "configuration" ? "is-active" : ""}
           type="button"
           role="tab"
           aria-selected={activeTab === "configuration"}
           onClick={() => setActiveTab("configuration")}
-        >{text("配置", "Configuration")}</button>
+        >{text("設定", "Configuration")}</button>
       </div>
 
       {activeTab === "settings" ? (
-        <div role="tabpanel" aria-label={text("设置", "Settings")}>
+        <div role="tabpanel" aria-label={text("設定", "Settings")}>
           <div className="workflow-config-section">
-            <h2>{text("常规", "General")}</h2>
+            <h2>{text("常規", "General")}</h2>
             <label>
-              <span>{text("节点名称", "Node name")}</span>
+              <span>{text("節點名稱", "Node name")}</span>
               <input
                 type="text"
                 value={data.title}
@@ -114,7 +114,7 @@ export function WorkflowInspector({
               />
             </label>
             <label>
-              <span>{text("说明", "Description")}</span>
+              <span>{text("說明", "Description")}</span>
               <textarea
                 rows={3}
                 value={data.description}
@@ -124,13 +124,13 @@ export function WorkflowInspector({
           </div>
 
           <div className="workflow-config-section">
-            <h2>{text("额外说明", "Additional instructions")}</h2>
+            <h2>{text("額外說明", "Additional instructions")}</h2>
             <textarea
-              aria-label={text("额外说明", "Additional instructions")}
+              aria-label={text("額外說明", "Additional instructions")}
               rows={4}
               value={data.additionalInstructions ?? ""}
               placeholder={text(
-                "补充执行约束、上下文或验收要求…",
+                "補充執行約束、上下文或驗收要求…",
                 "Add execution constraints, context, or acceptance criteria…",
               )}
               onChange={(event) => onChange({ additionalInstructions: event.target.value })}
@@ -142,7 +142,7 @@ export function WorkflowInspector({
             <div className="workflow-context-field">
               <span>
                 <LinearIcon name="project" />
-                {text("当前项目", "Current project")}
+                {text("目前專案", "Current project")}
               </span>
               <strong>{projectName}</strong>
               <LinearIcon name="chevronDown" />
@@ -150,17 +150,17 @@ export function WorkflowInspector({
           </div>
         </div>
       ) : (
-        <div role="tabpanel" aria-label={text("配置", "Configuration")}>
+        <div role="tabpanel" aria-label={text("設定", "Configuration")}>
           {data.kind === "issue-create" && (
             <div className="workflow-config-section">
-              <h2>{text("创建议题", "Create issue")}</h2>
+              <h2>{text("建立議題", "Create issue")}</h2>
               <label>
-                <span>{text("标题", "Title")}</span>
+                <span>{text("標題", "Title")}</span>
                 <input
-                  aria-label={text("ISSUE 标题", "Issue title")}
+                  aria-label={text("ISSUE 標題", "Issue title")}
                   type="text"
                   value={data.createIssueTitle ?? ""}
-                  placeholder={text("输入议题标题", "Enter an issue title")}
+                  placeholder={text("輸入議題標題", "Enter an issue title")}
                   onChange={(event) => onChange({ createIssueTitle: event.target.value })}
                 />
               </label>
@@ -170,14 +170,14 @@ export function WorkflowInspector({
                   aria-label={text("ISSUE 描述", "Issue description")}
                   rows={4}
                   value={data.createIssueDescription ?? ""}
-                  placeholder={text("补充议题描述…", "Add an issue description…")}
+                  placeholder={text("補充議題描述…", "Add an issue description…")}
                   onChange={(event) => onChange({ createIssueDescription: event.target.value })}
                 />
               </label>
               <label>
-                <span>{text("初始状态", "Initial status")}</span>
+                <span>{text("初始狀態", "Initial status")}</span>
                 <select
-                  aria-label={text("ISSUE 初始状态", "Issue initial status")}
+                  aria-label={text("ISSUE 初始狀態", "Issue initial status")}
                   value={data.createIssueStatus ?? "todo"}
                   onChange={(event) => onChange({ createIssueStatus: event.target.value })}
                 >
@@ -189,9 +189,9 @@ export function WorkflowInspector({
                 </select>
               </label>
               <label>
-                <span>{text("优先级", "Priority")}</span>
+                <span>{text("優先順序", "Priority")}</span>
                 <select
-                  aria-label={text("ISSUE 优先级", "Issue priority")}
+                  aria-label={text("ISSUE 優先順序", "Issue priority")}
                   value={data.createIssuePriority ?? "none"}
                   onChange={(event) => onChange({ createIssuePriority: event.target.value })}
                 >
@@ -203,13 +203,13 @@ export function WorkflowInspector({
                 </select>
               </label>
               <label>
-                <span>{text("标签", "Labels")}</span>
+                <span>{text("標籤", "Labels")}</span>
                 <input
-                  aria-label={text("ISSUE 标签", "Issue labels")}
+                  aria-label={text("ISSUE 標籤", "Issue labels")}
                   type="text"
                   value={data.createIssueLabels ?? ""}
                   placeholder={text(
-                    "多个标签用逗号分隔",
+                    "多個標籤用逗號分隔",
                     "Separate multiple labels with commas",
                   )}
                   onChange={(event) => onChange({ createIssueLabels: event.target.value })}
@@ -241,12 +241,12 @@ export function WorkflowInspector({
                 >
                   <option value="" disabled>
                     {!capabilities
-                      ? text("正在读取可用 Skill…", "Loading available Skills…")
+                      ? text("正在讀取可用 Skill…", "Loading available Skills…")
                       : capabilitiesFailed
-                        ? text("读取可用 Skill 失败", "Failed to load available Skills")
+                        ? text("讀取可用 Skill 失敗", "Failed to load available Skills")
                         : capabilities.skills.length === 0
-                          ? text("未发现可用 Skill", "No available Skills found")
-                          : text("请选择 Skill", "Select a Skill")}
+                          ? text("未發現可用 Skill", "No available Skills found")
+                          : text("請選擇 Skill", "Select a Skill")}
                   </option>
                   {(capabilities?.skills ?? []).map((skill) => (
                     <option key={skill.id} value={skill.id}>{skill.label}</option>
@@ -280,24 +280,24 @@ export function WorkflowInspector({
                       selectedMcpServer: event.target.value,
                       meta: server
                         ? `${server.label} · ${server.transport}`
-                        : "尚未选择 MCP Server",
+                        : "尚未選擇 MCP Server",
                     });
                   }}
                 >
                   <option value="" disabled>
                     {!capabilities
                       ? text(
-                        "正在读取可用 MCP Server…",
+                        "正在讀取可用 MCP Server…",
                         "Loading available MCP Servers…",
                       )
                       : capabilitiesFailed
                         ? text(
-                          "读取可用 MCP Server 失败",
+                          "讀取可用 MCP Server 失敗",
                           "Failed to load available MCP Servers",
                         )
                         : capabilities.mcpServers.length === 0
-                          ? text("未发现可用 MCP Server", "No available MCP Servers found")
-                          : text("请选择 MCP Server", "Select an MCP Server")}
+                          ? text("未發現可用 MCP Server", "No available MCP Servers found")
+                          : text("請選擇 MCP Server", "Select an MCP Server")}
                   </option>
                   {(capabilities?.mcpServers ?? []).map((server) => (
                     <option key={server.id} value={server.id}>
@@ -311,11 +311,11 @@ export function WorkflowInspector({
 
           {data.kind === "rss-trigger" && (
             <div className="workflow-config-section">
-              <h2>{text("RSS 订阅", "RSS feed")}</h2>
+              <h2>{text("RSS 訂閱", "RSS feed")}</h2>
               <label>
-                <span>{text("订阅地址", "Feed URL")}</span>
+                <span>{text("訂閱位址", "Feed URL")}</span>
                 <input
-                  aria-label={text("RSS 订阅地址", "RSS feed URL")}
+                  aria-label={text("RSS 訂閱位址", "RSS feed URL")}
                   type="url"
                   value={data.rssFeedUrl ?? ""}
                   placeholder="https://example.com/feed.xml"
@@ -327,11 +327,11 @@ export function WorkflowInspector({
 
           {data.kind === "condition" && (
             <div className="workflow-config-section">
-              <h2>{text("判断规则", "Condition rule")}</h2>
+              <h2>{text("判斷規則", "Condition rule")}</h2>
               <label>
-                <span>{text("判断字段", "Condition field")}</span>
+                <span>{text("判斷欄位", "Condition field")}</span>
                 <select
-                  aria-label={text("判断字段", "Condition field")}
+                  aria-label={text("判斷欄位", "Condition field")}
                   value={conditionField}
                   onChange={(event) => {
                     const selectedField = CONDITION_FIELDS.find(
@@ -352,9 +352,9 @@ export function WorkflowInspector({
                 </select>
               </label>
               <label>
-                <span>{text("运算符", "Operator")}</span>
+                <span>{text("運算子", "Operator")}</span>
                 <select
-                  aria-label={text("运算符", "Operator")}
+                  aria-label={text("運算子", "Operator")}
                   value={conditionOperator}
                   onChange={(event) => onChange({ conditionOperator: event.target.value })}
                 >
@@ -372,9 +372,9 @@ export function WorkflowInspector({
               </label>
               {conditionField === "issue-status" && (
                 <label>
-                  <span>{text("比较值", "Comparison value")}</span>
+                  <span>{text("比較值", "Comparison value")}</span>
                   <select
-                    aria-label={text("比较值", "Comparison value")}
+                    aria-label={text("比較值", "Comparison value")}
                     value={conditionValue}
                     onChange={(event) => onChange({ conditionValue: event.target.value })}
                   >
@@ -388,9 +388,9 @@ export function WorkflowInspector({
               )}
               {conditionField === "issue-priority" && (
                 <label>
-                  <span>{text("比较值", "Comparison value")}</span>
+                  <span>{text("比較值", "Comparison value")}</span>
                   <select
-                    aria-label={text("比较值", "Comparison value")}
+                    aria-label={text("比較值", "Comparison value")}
                     value={conditionValue}
                     onChange={(event) => onChange({ conditionValue: event.target.value })}
                   >
@@ -404,12 +404,12 @@ export function WorkflowInspector({
               )}
               {(conditionField === "issue-labels" || conditionField === "upstream-output") && (
                 <label>
-                  <span>{text("比较值", "Comparison value")}</span>
+                  <span>{text("比較值", "Comparison value")}</span>
                   <input
-                    aria-label={text("比较值", "Comparison value")}
+                    aria-label={text("比較值", "Comparison value")}
                     type="text"
                     value={conditionValue}
-                    placeholder={text("输入要比较的值", "Enter a value to compare")}
+                    placeholder={text("輸入要比較的值", "Enter a value to compare")}
                     onChange={(event) => onChange({ conditionValue: event.target.value })}
                   />
                 </label>
@@ -419,11 +419,11 @@ export function WorkflowInspector({
 
           {data.kind === "feishu-message" && (
             <div className="workflow-config-section">
-              <h2>{text("飞书消息", "Feishu message")}</h2>
+              <h2>{text("飛書訊息", "Feishu message")}</h2>
               <label>
-                <span>{text("发送对象", "Recipient")}</span>
+                <span>{text("傳送物件", "Recipient")}</span>
                 <select
-                  aria-label={text("飞书消息发送对象", "Feishu message recipient")}
+                  aria-label={text("飛書訊息傳送物件", "Feishu message recipient")}
                   value={data.feishuRecipientType ?? "self"}
                   onChange={(event) => onChange({
                     feishuRecipientType: event.target.value as WorkflowNodeData["feishuRecipientType"],
@@ -440,9 +440,9 @@ export function WorkflowInspector({
               </label>
               {data.feishuRecipientType === "user" && (
                 <label>
-                  <span>{text("用户 ID", "User ID")}</span>
+                  <span>{text("使用者 ID", "User ID")}</span>
                   <input
-                    aria-label={text("飞书用户", "Feishu user")}
+                    aria-label={text("飛書使用者", "Feishu user")}
                     type="text"
                     value={data.feishuUserId ?? ""}
                     placeholder={text("open_id 或 user_id", "open_id or user_id")}
@@ -454,7 +454,7 @@ export function WorkflowInspector({
                 <label>
                   <span>{text("群聊 ID", "Chat ID")}</span>
                   <input
-                    aria-label={text("飞书群聊", "Feishu chat")}
+                    aria-label={text("飛書群聊", "Feishu chat")}
                     type="text"
                     value={data.feishuChatId ?? ""}
                     placeholder="chat_id"
@@ -467,14 +467,14 @@ export function WorkflowInspector({
 
           {data.kind === "twitter-post" && (
             <div className="workflow-config-section">
-              <h2>{text("发布到 Twitter", "Post to Twitter")}</h2>
+              <h2>{text("釋出到 Twitter", "Post to Twitter")}</h2>
               <label>
-                <span>{text("发布内容", "Post content")}</span>
+                <span>{text("釋出內容", "Post content")}</span>
                 <textarea
-                  aria-label={text("Twitter 发布内容", "Twitter post content")}
+                  aria-label={text("Twitter 釋出內容", "Twitter post content")}
                   rows={6}
                   value={data.twitterPostContent ?? ""}
-                  placeholder={text("输入要发布的内容…", "Enter content to post…")}
+                  placeholder={text("輸入要釋出的內容…", "Enter content to post…")}
                   onChange={(event) => onChange({ twitterPostContent: event.target.value })}
                 />
               </label>
@@ -501,12 +501,12 @@ export function WorkflowInspector({
               {data.gitOperation === "commit" && (
                 <>
                   <label>
-                    <span>{text("提交说明", "Commit message")}</span>
+                    <span>{text("提交說明", "Commit message")}</span>
                     <input
-                      aria-label={text("Git 提交说明", "Git commit message")}
+                      aria-label={text("Git 提交說明", "Git commit message")}
                       type="text"
                       value={data.gitCommitMessage ?? ""}
-                      placeholder={text("描述本次变更", "Describe this change")}
+                      placeholder={text("描述本次變更", "Describe this change")}
                       onChange={(event) => onChange({ gitCommitMessage: event.target.value })}
                     />
                   </label>
@@ -516,16 +516,16 @@ export function WorkflowInspector({
                       checked={data.gitStageAll ?? true}
                       onChange={(event) => onChange({ gitStageAll: event.target.checked })}
                     />
-                    <span>{text("提交前暂存全部变更", "Stage all changes before commit")}</span>
+                    <span>{text("提交前暫存全部變更", "Stage all changes before commit")}</span>
                   </label>
                 </>
               )}
               {(data.gitOperation === "pull" || data.gitOperation === "push") && (
                 <>
                   <label>
-                    <span>{text("远程仓库", "Remote")}</span>
+                    <span>{text("遠端儲存庫", "Remote")}</span>
                     <input
-                      aria-label={text("Git 远程仓库", "Git remote")}
+                      aria-label={text("Git 遠端儲存庫", "Git remote")}
                       type="text"
                       value={data.gitRemote ?? "origin"}
                       placeholder="origin"
@@ -539,7 +539,7 @@ export function WorkflowInspector({
                       type="text"
                       value={data.gitBranchName ?? ""}
                       placeholder={text(
-                        "留空使用当前分支",
+                        "留空使用目前分支",
                         "Leave blank to use the current branch",
                       )}
                       onChange={(event) => onChange({ gitBranchName: event.target.value })}
@@ -551,9 +551,9 @@ export function WorkflowInspector({
                 || data.gitOperation === "switch-branch"
                 || data.gitOperation === "merge-branch") && (
                 <label>
-                  <span>{text("分支名称", "Branch name")}</span>
+                  <span>{text("分支名稱", "Branch name")}</span>
                   <input
-                    aria-label={text("Git 分支名称", "Git branch name")}
+                    aria-label={text("Git 分支名稱", "Git branch name")}
                     type="text"
                     value={data.gitBranchName ?? ""}
                     placeholder="feature/workflow"
@@ -564,13 +564,13 @@ export function WorkflowInspector({
               {(data.gitOperation === "create-branch"
                 || data.gitOperation === "create-worktree") && (
                 <label>
-                  <span>{text("基于分支", "Base branch")}</span>
+                  <span>{text("基於分支", "Base branch")}</span>
                   <input
-                    aria-label={text("Git 基于分支", "Git base branch")}
+                    aria-label={text("Git 基於分支", "Git base branch")}
                     type="text"
                     value={data.gitBaseBranch ?? ""}
                     placeholder={text(
-                      "留空使用当前分支",
+                      "留空使用目前分支",
                       "Leave blank to use the current branch",
                     )}
                     onChange={(event) => onChange({ gitBaseBranch: event.target.value })}
@@ -590,9 +590,9 @@ export function WorkflowInspector({
                     />
                   </label>
                   <label>
-                    <span>{text("Worktree 目录", "Worktree directory")}</span>
+                    <span>{text("Worktree 目錄", "Worktree directory")}</span>
                     <input
-                      aria-label={text("Git Worktree 目录", "Git worktree directory")}
+                      aria-label={text("Git Worktree 目錄", "Git worktree directory")}
                       type="text"
                       value={data.gitWorktreePath ?? ""}
                       placeholder="../project-worktree"
@@ -606,11 +606,11 @@ export function WorkflowInspector({
 
           {data.kind === "custom-code" && (
             <div className="workflow-config-section">
-              <h2>{text("自定义代码", "Custom code")}</h2>
+              <h2>{text("自訂程式碼", "Custom code")}</h2>
               <label>
-                <span>{text("运行环境", "Runtime")}</span>
+                <span>{text("執行環境", "Runtime")}</span>
                 <select
-                  aria-label={text("代码运行环境", "Code runtime")}
+                  aria-label={text("程式碼執行環境", "Code runtime")}
                   value={data.codeRuntime ?? "shell"}
                   onChange={(event) => onChange({ codeRuntime: event.target.value as WorkflowNodeData["codeRuntime"] })}
                 >
@@ -622,12 +622,12 @@ export function WorkflowInspector({
                 </select>
               </label>
               <label>
-                <span>{text("代码内容", "Code")}</span>
+                <span>{text("程式碼內容", "Code")}</span>
                 <textarea
-                  aria-label={text("代码内容", "Code")}
+                  aria-label={text("程式碼內容", "Code")}
                   rows={10}
                   value={data.codeContent ?? ""}
-                  placeholder={text("输入要运行的代码…", "Enter code to run…")}
+                  placeholder={text("輸入要執行的程式碼…", "Enter code to run…")}
                   onChange={(event) => onChange({ codeContent: event.target.value })}
                 />
               </label>
@@ -636,11 +636,11 @@ export function WorkflowInspector({
 
           {data.kind === "run-tests" && (
             <div className="workflow-config-section">
-              <h2>{text("运行测试", "Run tests")}</h2>
+              <h2>{text("執行測試", "Run tests")}</h2>
               <label>
-                <span>{text("测试范围", "Test scope")}</span>
+                <span>{text("測試範圍", "Test scope")}</span>
                 <select
-                  aria-label={text("测试范围", "Test scope")}
+                  aria-label={text("測試範圍", "Test scope")}
                   value={data.testScope ?? "related"}
                   onChange={(event) => onChange({ testScope: event.target.value as WorkflowNodeData["testScope"] })}
                 >
@@ -653,9 +653,9 @@ export function WorkflowInspector({
               </label>
               {data.testScope === "custom" && (
                 <label>
-                  <span>{text("测试命令", "Test command")}</span>
+                  <span>{text("測試命令", "Test command")}</span>
                   <input
-                    aria-label={text("测试命令", "Test command")}
+                    aria-label={text("測試命令", "Test command")}
                     type="text"
                     value={data.testCommand ?? ""}
                     placeholder={text(
@@ -685,9 +685,9 @@ export function WorkflowInspector({
                 </select>
               </label>
               <label>
-                <span>{text("推理强度", "Reasoning effort")}</span>
+                <span>{text("推理強度", "Reasoning effort")}</span>
                 <select
-                  aria-label={text("推理强度", "Reasoning effort")}
+                  aria-label={text("推理強度", "Reasoning effort")}
                   value={data.reasoningEffort ?? "high"}
                   onChange={(event) => onChange({ reasoningEffort: event.target.value })}
                 >
@@ -698,12 +698,12 @@ export function WorkflowInspector({
                 </select>
               </label>
               <label>
-                <span>{text("规划要求", "Planning requirements")}</span>
+                <span>{text("規劃要求", "Planning requirements")}</span>
                 <textarea
                   rows={4}
                   value={data.planningRequirements ?? ""}
                   placeholder={text(
-                    "说明分析步骤、约束、风险和验收要求…",
+                    "說明分析步驟、約束、風險和驗收要求…",
                     "Describe analysis steps, constraints, risks, and acceptance criteria…",
                   )}
                   onChange={(event) => onChange({ planningRequirements: event.target.value })}
@@ -714,11 +714,11 @@ export function WorkflowInspector({
 
           {data.kind === "issue-trigger" && (
             <div className="workflow-config-section">
-              <h2>{text("触发条件", "Trigger condition")}</h2>
+              <h2>{text("觸發條件", "Trigger condition")}</h2>
               <label>
-                <span>{text("议题状态变为", "Issue status changes to")}</span>
+                <span>{text("議題狀態變為", "Issue status changes to")}</span>
                 <select
-                  aria-label={text("议题触发状态", "Issue trigger status")}
+                  aria-label={text("議題觸發狀態", "Issue trigger status")}
                   value={data.triggerStatus ?? "todo"}
                   onChange={(event) => {
                     const status = ISSUE_STATUSES.find(
@@ -726,7 +726,7 @@ export function WorkflowInspector({
                     )!;
                     onChange({
                       triggerStatus: event.target.value,
-                      description: `状态变为「${status.label}」时触发`,
+                      description: `狀態變為「${status.label}」時觸發`,
                     });
                   }}
                 >
@@ -742,31 +742,31 @@ export function WorkflowInspector({
 
           {data.kind === "issue-update" && (
             <div className="workflow-config-section">
-              <h2>{text("议题操作", "Issue actions")}</h2>
+              <h2>{text("議題操作", "Issue actions")}</h2>
               <label>
-                <span>{text("议题选择", "Issue selection")}</span>
+                <span>{text("議題選擇", "Issue selection")}</span>
                 <select
-                  aria-label={text("议题选择", "Issue selection")}
+                  aria-label={text("議題選擇", "Issue selection")}
                   value={data.issueTarget ?? "trigger"}
                   onChange={(event) => onChange({ issueTarget: event.target.value })}
                 >
                   <option value="trigger">
-                    {text("触发流程的议题", "Issue that triggered the workflow")}
+                    {text("觸發流程的議題", "Issue that triggered the workflow")}
                   </option>
                   <option value="upstream">
-                    {text("上游节点输出的议题", "Issue from an upstream node")}
+                    {text("上游節點輸出的議題", "Issue from an upstream node")}
                   </option>
-                  <option value="specific">{text("指定议题", "Specific issue")}</option>
+                  <option value="specific">{text("指定議題", "Specific issue")}</option>
                 </select>
               </label>
               {data.issueTarget === "specific" && (
                 <label>
-                  <span>{text("议题 ID", "Issue ID")}</span>
+                  <span>{text("議題 ID", "Issue ID")}</span>
                   <input
-                    aria-label={text("指定议题 ID", "Specific issue ID")}
+                    aria-label={text("指定議題 ID", "Specific issue ID")}
                     type="text"
                     value={data.specificIssueId ?? ""}
-                    placeholder={text("输入实际议题编号", "Enter an issue ID")}
+                    placeholder={text("輸入實際議題編號", "Enter an issue ID")}
                     onChange={(event) => onChange({ specificIssueId: event.target.value })}
                   />
                 </label>
@@ -778,10 +778,10 @@ export function WorkflowInspector({
                     checked={data.changeStatus ?? false}
                     onChange={(event) => onChange({ changeStatus: event.target.checked })}
                   />
-                  <span>{text("改变状态", "Change status")}</span>
+                  <span>{text("改變狀態", "Change status")}</span>
                 </label>
                 <select
-                  aria-label={text("目标状态", "Target status")}
+                  aria-label={text("目標狀態", "Target status")}
                   disabled={!data.changeStatus}
                   value={data.targetStatus ?? "in_review"}
                   onChange={(event) => onChange({ targetStatus: event.target.value })}
@@ -800,31 +800,31 @@ export function WorkflowInspector({
                     checked={data.addComment ?? false}
                     onChange={(event) => onChange({ addComment: event.target.checked })}
                   />
-                  <span>{text("添加评论", "Add comment")}</span>
+                  <span>{text("新增評論", "Add comment")}</span>
                 </label>
                 <select
-                  aria-label={text("评论内容", "Comment content")}
+                  aria-label={text("評論內容", "Comment content")}
                   disabled={!data.addComment}
                   value={data.commentSource ?? "workflow-output"}
                   onChange={(event) => onChange({ commentSource: event.target.value })}
                 >
                   <option value="workflow-output">
-                    {text("上游节点输出", "Upstream node output")}
+                    {text("上游節點輸出", "Upstream node output")}
                   </option>
                   <option value="run-summary">
-                    {text("流程运行摘要", "Workflow run summary")}
+                    {text("流程執行摘要", "Workflow run summary")}
                   </option>
-                  <option value="custom">{text("自定义内容", "Custom content")}</option>
+                  <option value="custom">{text("自訂內容", "Custom content")}</option>
                 </select>
               </div>
               {data.addComment && data.commentSource === "custom" && (
                 <label>
-                  <span>{text("评论内容", "Comment content")}</span>
+                  <span>{text("評論內容", "Comment content")}</span>
                   <textarea
                     rows={3}
                     value={data.customComment ?? ""}
                     placeholder={text(
-                      "输入要追加到议题的评论…",
+                      "輸入要追加到議題的評論…",
                       "Enter a comment to add to the issue…",
                     )}
                     onChange={(event) => onChange({ customComment: event.target.value })}
@@ -838,14 +838,14 @@ export function WorkflowInspector({
                     checked={data.addLabels ?? false}
                     onChange={(event) => onChange({ addLabels: event.target.checked })}
                   />
-                  <span>{text("添加标签", "Add labels")}</span>
+                  <span>{text("新增標籤", "Add labels")}</span>
                 </label>
                 <input
-                  aria-label={text("要添加的标签", "Labels to add")}
+                  aria-label={text("要新增的標籤", "Labels to add")}
                   type="text"
                   disabled={!data.addLabels}
                   value={data.labelsToAdd ?? ""}
-                  placeholder={text("自动化, 已处理", "Automation, Processed")}
+                  placeholder={text("自動化, 已處理", "Automation, Processed")}
                   onChange={(event) => onChange({ labelsToAdd: event.target.value })}
                 />
               </div>
@@ -856,10 +856,10 @@ export function WorkflowInspector({
                     checked={data.setPriority ?? false}
                     onChange={(event) => onChange({ setPriority: event.target.checked })}
                   />
-                  <span>{text("设置优先级", "Set priority")}</span>
+                  <span>{text("設定優先順序", "Set priority")}</span>
                 </label>
                 <select
-                  aria-label={text("目标优先级", "Target priority")}
+                  aria-label={text("目標優先順序", "Target priority")}
                   disabled={!data.setPriority}
                   value={data.targetPriority ?? "none"}
                   onChange={(event) => onChange({ targetPriority: event.target.value })}
@@ -877,7 +877,7 @@ export function WorkflowInspector({
                   checked={data.attachArtifacts ?? false}
                   onChange={(event) => onChange({ attachArtifacts: event.target.checked })}
                 />
-                <span>{text("附加流程运行产物", "Attach workflow run artifacts")}</span>
+                <span>{text("附加流程執行產物", "Attach workflow run artifacts")}</span>
               </label>
               <label className="workflow-action-toggle workflow-action-toggle-full">
                 <input
@@ -887,7 +887,7 @@ export function WorkflowInspector({
                 />
                 <span>
                   {text(
-                    "记录执行该议题的 Codex 对话",
+                    "記錄執行該議題的 Codex 對話",
                     "Record the Codex conversation that processes this issue",
                   )}
                 </span>
@@ -896,27 +896,27 @@ export function WorkflowInspector({
           )}
 
           <div className="workflow-config-section">
-            <h2>{text("连接", "Connections")}</h2>
+            <h2>{text("連線", "Connections")}</h2>
             <div className="workflow-port-row">
               <span>
                 <i className="input" aria-hidden="true" />
-                {text("输入", "Input")}
+                {text("輸入", "Input")}
               </span>
               <strong>
                 {data.inputLabel
                   ? workflowText(text, data.inputLabel)
-                  : text("无", "None")}
+                  : text("無", "None")}
               </strong>
             </div>
             <div className="workflow-port-row">
               <span>
                 <i className="output" aria-hidden="true" />
-                {text("输出", "Output")}
+                {text("輸出", "Output")}
               </span>
               <strong>
                 {data.outputLabel
                   ? workflowText(text, data.outputLabel)
-                  : text("无", "None")}
+                  : text("無", "None")}
               </strong>
             </div>
           </div>

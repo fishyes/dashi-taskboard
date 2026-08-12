@@ -70,8 +70,8 @@ export function WorkflowInsertEdge({
           <button
             className="workflow-sequence-add nodrag nopan"
             type="button"
-            aria-label={text("在此处添加步骤", "Add a step here")}
-            title={text("添加步骤", "Add step")}
+            aria-label={text("在此處新增步驟", "Add a step here")}
+            title={text("新增步驟", "Add step")}
             style={{
               transform: `translate(-50%, -50%) translate(${buttonX}px, ${buttonY}px)`,
             }}

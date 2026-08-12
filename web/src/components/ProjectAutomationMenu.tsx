@@ -50,12 +50,12 @@ const DEFAULT_OPTIONS: AutomationOptions = {
 };
 
 const EFFORT_LABELS: Record<AutomationReasoningEffort, readonly [string, string]> = {
-  low: ["轻度", "Low"],
+  low: ["輕度", "Low"],
   medium: ["中", "Medium"],
   high: ["高", "High"],
-  xhigh: ["极高 (xhigh)", "Extra high (xhigh)"],
+  xhigh: ["極高 (xhigh)", "Extra high (xhigh)"],
   max: ["最高", "Maximum"],
-  ultra: ["极高 (ultra)", "Ultra"],
+  ultra: ["極高 (ultra)", "Ultra"],
 };
 
 export function ProjectAutomationMenu({
@@ -76,16 +76,16 @@ export function ProjectAutomationMenu({
   const status = automation?.status ?? "PAUSED";
   const quota = automation?.quota;
   const stateLabel = !automation?.enabledByUser
-    ? text("已暂停", "Paused")
+    ? text("已暫停", "Paused")
     : automation.quotaAware && quota?.state === "blocked"
-      ? text("额度暂停", "Paused by quota")
+      ? text("額度暫停", "Paused by quota")
       : automation.quotaAware && quota?.state === "unavailable"
-        ? text("额度不可用", "Quota unavailable")
+        ? text("額度不可用", "Quota unavailable")
         : automation.quotaAware && (!quota || quota.state === "unknown")
-          ? text("额度未知", "Quota unknown")
+          ? text("額度未知", "Quota unknown")
           : status === "ACTIVE"
-            ? text("运行中", "Running")
-            : text("已暂停", "Paused");
+            ? text("執行中", "Running")
+            : text("已暫停", "Paused");
   const disabled = pending || Boolean(unavailableReason);
 
   useEffect(() => {
@@ -150,17 +150,17 @@ export function ProjectAutomationMenu({
       ref={menuRef}
       className="project-automation-menu no-drag"
       role="dialog"
-      aria-label={text("自动认领待办设置", "Auto-claim settings")}
+      aria-label={text("自動認領待辦設定", "Auto-claim settings")}
       style={{ left: position.left, top: position.top, visibility: position.ready ? "visible" : "hidden" }}
     >
       <div className="project-automation-menu-heading">
-        <strong>{text("自动认领待办", "Auto-claim tasks")}</strong>
+        <strong>{text("自動認領待辦", "Auto-claim tasks")}</strong>
         <span className={status === "ACTIVE" ? "is-active" : "is-paused"}>
           {stateLabel}
         </span>
       </div>
       <div className="project-automation-switch">
-        <span>{text("自动认领开关", "Auto-claim")}</span>
+        <span>{text("自動認領開關", "Auto-claim")}</span>
         <button
           type="button"
           className={`board-setting-switch${draft.enabledByUser ? " is-on" : ""}`}
@@ -176,7 +176,7 @@ export function ProjectAutomationMenu({
         </button>
       </div>
       <div className="project-automation-switch">
-        <span>{text("根据额度启用/关闭", "Use quota limits")}</span>
+        <span>{text("根據額度啟用/停用", "Use quota limits")}</span>
         <button
           type="button"
           className={`board-setting-switch${draft.quotaAware ? " is-on" : ""}`}
@@ -193,31 +193,31 @@ export function ProjectAutomationMenu({
       </div>
       {draft.quotaAware && (
         <div className={`project-automation-quota is-${quota?.state ?? "unknown"}`}>
-          {quota?.state === "available" && text("当前额度可用", "Quota is available")}
+          {quota?.state === "available" && text("目前額度可用", "Quota is available")}
           {quota?.state === "blocked" && (
             quota.resetsAt
               ? text(
-                `额度已用尽，预计 ${formatResetTime(quota.resetsAt, locale)} 恢复`,
+                `額度已用盡，預計 ${formatResetTime(quota.resetsAt, locale)} 恢復`,
                 `Quota is exhausted. Expected reset: ${formatResetTime(quota.resetsAt, locale)}.`,
               )
-              : text("额度已用尽，自动认领已暂停", "Quota is exhausted. Auto-claim is paused.")
+              : text("額度已用盡，自動認領已暫停", "Quota is exhausted. Auto-claim is paused.")
           )}
           {quota?.state === "unavailable" && (
             quota.reason === "api-key"
               ? text(
-                "API Key 模式不支持读取 Codex App 额度",
+                "API Key 模式不支援讀取 Codex App 額度",
                 "API key mode cannot read the Codex app quota.",
               )
-              : text("当前账户无法读取额度", "This account cannot read quota information.")
+              : text("目前帳戶無法讀取額度", "This account cannot read quota information.")
           )}
           {(!quota || quota.state === "unknown") && text(
-            "额度状态未知，自动认领已暂停",
+            "額度狀態未知，自動認領已暫停",
             "Quota status is unknown. Auto-claim is paused.",
           )}
         </div>
       )}
       <label className="project-automation-field">
-        <span>{text("间隔", "Interval")}</span>
+        <span>{text("間隔", "Interval")}</span>
         <select
           value={draft.intervalMinutes}
           disabled={disabled}
@@ -227,7 +227,7 @@ export function ProjectAutomationMenu({
           })}
         >
           {[5, 10, 15, 30, 60].map((minutes) => (
-            <option key={minutes} value={minutes}>{text(`${minutes} 分钟`, `${minutes} min`)}</option>
+            <option key={minutes} value={minutes}>{text(`${minutes} 分鐘`, `${minutes} min`)}</option>
           ))}
         </select>
       </label>
@@ -244,7 +244,7 @@ export function ProjectAutomationMenu({
         </select>
       </label>
       <label className="project-automation-field">
-        <span>{text("推理强度", "Reasoning effort")}</span>
+        <span>{text("推理強度", "Reasoning effort")}</span>
         <select
           value={draft.reasoningEffort}
           disabled={disabled}
@@ -271,14 +271,14 @@ export function ProjectAutomationMenu({
         type="button"
         className={`project-automation-trigger no-drag ${status === "ACTIVE" ? "is-active" : "is-paused"}`}
         aria-label={status === "ACTIVE"
-          ? text("自动认领中", "Auto-claiming")
-          : text("自动化", "Automation")}
+          ? text("自動認領中", "Auto-claiming")
+          : text("自動化", "Automation")}
         aria-busy={pending}
         aria-haspopup="dialog"
         aria-expanded={open}
         title={status === "ACTIVE"
-          ? text("自动认领中", "Auto-claiming")
-          : text("自动化", "Automation")}
+          ? text("自動認領中", "Auto-claiming")
+          : text("自動化", "Automation")}
         onClick={() => {
           if (!open) {
             setPosition((current) => ({ ...current, ready: false }));
@@ -289,8 +289,8 @@ export function ProjectAutomationMenu({
       >
         <TaskboardIcon name={status === "ACTIVE" ? "automationPause" : "automationPlay"} />
         <span>{status === "ACTIVE"
-          ? text("自动认领中", "Auto-claiming")
-          : text("自动化", "Automation")}</span>
+          ? text("自動認領中", "Auto-claiming")
+          : text("自動化", "Automation")}</span>
       </button>
       {menu}
     </>

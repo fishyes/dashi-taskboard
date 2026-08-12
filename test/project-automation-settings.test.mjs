@@ -53,7 +53,7 @@ test("automation requests use the exact Codex host message contract", () => {
 test("project mapping is based on exact ids and workspace paths, never project names", () => {
   assert.match(appSource, /hostContext\?\.projects\?\.some\([\s\S]*?project\.id === selectedProject\.id/);
   assert.match(appSource, /deviceWorkspacePaths\[project\.id\] === workspacePath/);
-  assert.match(appSource, /请先在 Codex 中添加并映射该项目目录/);
+  assert.match(appSource, /請先在 Codex 中新增並對應該專案目錄/);
   assert.doesNotMatch(appSource, /project\.name === selectedProject\.name/);
 });
 
@@ -61,10 +61,10 @@ test("the project navigation automation menu owns the icon, fields, and accessib
   assert.match(menuSource, /status === "ACTIVE" \? "automationPause" : "automationPlay"/);
   assert.doesNotMatch(menuSource, /statusStarted|statusTodo/);
   assert.match(menuSource, /aria-busy=\{pending/);
-  assert.match(menuSource, /自动认领/);
-  assert.match(menuSource, /aria-label=\{status === "ACTIVE"\s*\? text\("自动认领中", "Auto-claiming"\)\s*: text\("自动化", "Automation"\)\}/);
-  assert.doesNotMatch(menuSource, /已开启自动认领|自动认领未开启/);
-  assert.match(menuSource, /自动认领开关/);
+  assert.match(menuSource, /自動認領/);
+  assert.match(menuSource, /aria-label=\{status === "ACTIVE"\s*\? text\("自動認領中", "Auto-claiming"\)\s*: text\("自動化", "Automation"\)\}/);
+  assert.doesNotMatch(menuSource, /已開啟自動認領|自動認領未開啟/);
+  assert.match(menuSource, /自動認領開關/);
   assert.match(menuSource, /5, 10, 15, 30, 60/);
   assert.match(menuSource, /AUTOMATION_MODELS\.map/);
   assert.match(menuSource, /EFFORT_LABELS\[effort\]/);
@@ -76,7 +76,7 @@ test("the project navigation automation menu owns the icon, fields, and accessib
   assert.match(appSource, /<ProjectAutomationMenu/);
   assert.match(appSource, /<ProjectAutomationMenu[\s\S]*?<button[\s\S]*?header-create-button/);
   assert.doesNotMatch(appSource, /toolbar-connection/);
-  assert.match(appSource, /仅本地任务面板可用/);
+  assert.match(appSource, /僅本機任務面板可用/);
 });
 
 test("automation status uses the exported Taskboard play and pause icon assets", () => {
@@ -123,12 +123,12 @@ test("automation changes submit immediately with model-specific effort normaliza
   assert.match(menuSource, /submitChange\(withAutomationModel\(draft, event\.target\.value as AutomationModel\)\)/);
   assert.match(menuSource, /getAutomationModel\(draft\.model\)\.efforts\.map/);
   assert.match(menuSource, /<option key=\{effort\} value=\{effort\}>\{text\(\.\.\.EFFORT_LABELS\[effort\]\)\}<\/option>/);
-  assert.match(menuSource, /low: \["轻度", "Low"\]/);
-  assert.match(menuSource, /xhigh: \["极高 \(xhigh\)", "Extra high \(xhigh\)"\]/);
+  assert.match(menuSource, /low: \["輕度", "Low"\]/);
+  assert.match(menuSource, /xhigh: \["極高 \(xhigh\)", "Extra high \(xhigh\)"\]/);
   assert.match(menuSource, /max: \["最高", "Maximum"\]/);
-  assert.match(menuSource, /ultra: \["极高 \(ultra\)", "Ultra"\]/);
+  assert.match(menuSource, /ultra: \["極高 \(ultra\)", "Ultra"\]/);
   assert.doesNotMatch(menuSource, />取消</);
-  assert.doesNotMatch(menuSource, />保存</);
+  assert.doesNotMatch(menuSource, />儲存</);
   assert.doesNotMatch(menuSource, /project-automation-actions/);
   assert.doesNotMatch(menuSource, /onSave/);
   assert.doesNotMatch(styles, /\.project-automation-actions/);

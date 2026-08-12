@@ -446,8 +446,8 @@ class CdpConnection {
   }
 }
 
-// 页面识别参考 Codex++：Windows 版主页面可能是 https://chatgpt.com 或标题含 codex，
-// 不一定是 app://；浮层/快捷聊天窗按 initialRoute 排除，避免注入错窗口
+// 頁面識別參考 Codex++：Windows 版主頁面可能是 https://chatgpt.com 或標題含 codex，
+// 不一定是 app://；浮層/快捷聊天窗按 initialRoute 排除，避免注入錯視窗
 function targetInitialRoute(target) {
   try {
     const url = new URL(target.url || "");
@@ -822,7 +822,7 @@ async function requestCodexAutomationViaCdp(cdp, executionContextId, method, par
       const requestId = ${JSON.stringify(requestId)};
       const bridge = window.electronBridge;
       if (!bridge || typeof bridge.sendMessageFromView !== "function") {
-        resolve({ ok: false, error: "当前 Codex 版本没有提供原生自动任务能力" });
+        resolve({ ok: false, error: "目前 Codex 版本沒有提供原生自動任務能力" });
         return;
       }
       let settled = false;
@@ -849,7 +849,7 @@ async function requestCodexAutomationViaCdp(cdp, executionContextId, method, par
         });
       };
       const timeout = window.setTimeout(
-        () => finish({ ok: false, error: "Codex 自动任务接口没有响应" }),
+        () => finish({ ok: false, error: "Codex 自動任務介面沒有回應" }),
         10_000,
       );
       window.addEventListener("message", onMessage);
@@ -1765,7 +1765,7 @@ async function main() {
     let firstResults = [];
     const firstOpenGeneration = openRequestGeneration;
     const shouldOpenFirstTarget = firstOpenGeneration > openedRequestGeneration;
-    // CDP 端口就绪早于 renderer 窗口创建，初始注入失败整体重试一轮
+    // CDP 埠就緒早於 renderer 視窗建立，初始注入失敗整體重試一輪
     let lastError = null;
     for (let attempt = 1; attempt <= 2; attempt += 1) {
       try {

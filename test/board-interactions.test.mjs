@@ -94,11 +94,11 @@ test("the complete Linear-style workflow shares one ordered status source", () =
     "done",
     "canceled",
   ]);
-  assert.match(boardColumnSource, /backlog: \{ label: "待立项", tone: "backlog" \}/);
-  assert.match(boardColumnSource, /todo: \{ label: "等待认领", tone: "todo" \}/);
-  assert.match(boardColumnSource, /in_progress: \{ label: "处理中", tone: "progress" \}/);
-  assert.match(boardColumnSource, /in_review: \{ label: "等你确认", tone: "review" \}/);
-  assert.match(boardColumnSource, /blocked: \{ label: "遇到阻碍", tone: "blocked" \}/);
+  assert.match(boardColumnSource, /backlog: \{ label: "待規劃", tone: "backlog" \}/);
+  assert.match(boardColumnSource, /todo: \{ label: "待認領", tone: "todo" \}/);
+  assert.match(boardColumnSource, /in_progress: \{ label: "處理中", tone: "progress" \}/);
+  assert.match(boardColumnSource, /in_review: \{ label: "等你確認", tone: "review" \}/);
+  assert.match(boardColumnSource, /blocked: \{ label: "遇到阻礙", tone: "blocked" \}/);
   assert.match(boardColumnSource, /done: \{ label: "完成", tone: "done" \}/);
   assert.match(boardColumnSource, /canceled: \{ label: "取消", tone: "canceled" \}/);
   assert.doesNotMatch(cardSource, /STATUS_ORDER/);
@@ -135,20 +135,20 @@ test("common issue mutations enter a Linear-style undo queue", () => {
   assert.match(appSource, /void performUndo\(\)/);
   assert.match(appSource, /moveTask\(task, destination, beforeTaskId, true\)/);
   assert.match(appSource, /className="toast undo-toast"/);
-  assert.match(appSource, />\s*\{text\("撤回", "Undo"\)\} <kbd>\{undoShortcut\}<\/kbd>/);
+  assert.match(appSource, />\s*\{text\("復原", "Undo"\)\} <kbd>\{undoShortcut\}<\/kbd>/);
   assert.match(appSource, /restoreTaskRequest\(archived\)/);
   assert.match(apiSource, /export async function restoreTask/);
 });
 
 test("issues expose processing conversations without manual binding", () => {
-  assert.match(detailSource, /在对话中打开/);
+  assert.match(detailSource, /在對話中開啟/);
   assert.match(detailSource, /onOpenInThread\(currentTask\)/);
   assert.doesNotMatch(appSource, /detail-thread-button/);
-  assert.doesNotMatch(detailSource, /输入对话 ID|解除 Codex 对话绑定|>绑定</);
-  assert.doesNotMatch(editorSource, /对话 ID|linkedThreadId/);
+  assert.doesNotMatch(detailSource, /輸入對話 ID|解除 Codex 對話綁定|>綁定</);
+  assert.doesNotMatch(editorSource, /對話 ID|linkedThreadId/);
   assert.match(detailSource, /currentTask\.threadId/);
   assert.doesNotMatch(detailSource, /currentTask\.threadIds/);
-  assert.match(detailSource, /<strong>\{text\("查看对话", "View conversation"\)\}<\/strong>/);
+  assert.match(detailSource, /<strong>\{text\("檢視對話", "View conversation"\)\}<\/strong>/);
   assert.match(detailSource, /className="conversation-thread-id">\{threadId\}/);
   assert.doesNotMatch(detailSource, /shortThreadId/);
   assert.doesNotMatch(detailSource, /detail-property-label">Codex/);
@@ -156,11 +156,11 @@ test("issues expose processing conversations without manual binding", () => {
   assert.match(detailSource, /threadId=\{comment\.threadId\}/);
   assert.doesNotMatch(detailSource, /compact/);
   assert.doesNotMatch(styles, /issue-conversation-link\.compact/);
-  assert.match(detailSource, /代码分支/);
+  assert.match(detailSource, /程式碼分支/);
   assert.match(detailSource, /Worktree/);
   assert.match(detailSource, /developmentContext/);
-  assert.doesNotMatch(detailSource, /placeholder="绑定分支/);
-  assert.doesNotMatch(contextMenuSource, /打开关联 Codex 对话/);
+  assert.doesNotMatch(detailSource, /placeholder="綁定分支/);
+  assert.doesNotMatch(contextMenuSource, /開啟關聯 Codex 對話/);
   assert.match(contextMenuSource, /onOpenInThread/);
 });
 
@@ -197,10 +197,10 @@ test("issue creation and detail share one searchable, creatable label picker", (
   assert.match(appSource, /<TaskDetail[\s\S]*?availableLabels=\{availableLabels\}/);
   assert.match(detailSource, /selectedLabels=\{currentTask\.labels\}/);
   assert.match(detailSource, /saveTask\(\{ labels: nextLabels \}, "labels"\)/);
-  assert.doesNotMatch(detailSource, /标签，以逗号分隔|function saveLabels|labels\.split/);
+  assert.doesNotMatch(detailSource, /標籤，以逗號分隔|function saveLabels|labels\.split/);
   assert.match(labelPickerSource, /availableLabels\.filter/);
   assert.match(labelPickerSource, /selectedLabels\.includes\(label\)/);
-  assert.match(labelPickerSource, /text\(`创建 “\$\{normalizedSearch\}”`, `Create “\$\{normalizedSearch\}”`\)/);
+  assert.match(labelPickerSource, /text\(`建立 “\$\{normalizedSearch\}”`, `Create “\$\{normalizedSearch\}”`\)/);
   assert.match(labelPickerSource, /labelPresentation\(normalizedSearch, language\)\.color/);
   assert.match(labelPickerSource, /aria-multiselectable="true"/);
   assert.match(styles, /\.detail-label-picker \.label-popover/);

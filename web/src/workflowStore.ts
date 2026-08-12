@@ -3,7 +3,7 @@ import type { WorkflowOption } from "./types";
 
 export const WORKFLOW_STATE_KEY_PREFIX = "taskboard.workflow.workspace.";
 export const INITIAL_WORKFLOW_ID = "issue-delivery";
-export const INITIAL_WORKFLOW_NAME = "议题处理与交付";
+export const INITIAL_WORKFLOW_NAME = "議題處理與交付";
 export const DEFAULT_WORKFLOW_OPTIONS: WorkflowOption[] = [
   { id: INITIAL_WORKFLOW_ID, name: INITIAL_WORKFLOW_NAME },
 ];

@@ -6,7 +6,7 @@ import vm from "node:vm";
 import { parseTaskboardAutomationHostRequest } from "../shared/taskboard-automation.mjs";
 
 const sourceUrl = new URL("../inject/codex-taskboard.user.js", import.meta.url);
-// 归一化行尾：Windows 上 core.autocrlf 检出为 CRLF，切片逻辑按 LF 匹配
+// 歸一化行尾：Windows 上 core.autocrlf 檢出為 CRLF，切片邏輯按 LF 匹配
 const source = (await readFile(sourceUrl, "utf8")).replace(/\r\n/g, "\n");
 const webStyles = await readFile(new URL("../web/src/styles.css", import.meta.url), "utf8");
 const webApp = await readFile(new URL("../web/src/App.tsx", import.meta.url), "utf8");
@@ -37,7 +37,7 @@ test("embedded page uses the launcher URL inside an opaque sandbox", () => {
 });
 
 test("entry clones the native Plugins row and the page covers the complete Codex workspace", () => {
-  assert.match(source, /const PLUGIN_LABELS = \["插件", "外掛程式", "plugins"\]/);
+  assert.match(source, /const PLUGIN_LABELS = \["外掛", "外掛程式", "插件", "plugins"\]/);
   assert.match(source, /if \(siblings\.length >= 3\) return plugin;/);
   assert.match(source, /return directButtons\.length >= 3/);
   assert.match(source, /const button = reference\.cloneNode\(true\)/);
@@ -278,7 +278,7 @@ test("issues open an unsent native Codex composer in the exact workspace with th
   assert.doesNotMatch(webApp, /taskboard:thread-created/);
   assert.match(
     webApp,
-    /const instruction = `e-taskboard 处理任务面板任务 \$\{task\.identifier\}，并同步进度状态。`/,
+    /const instruction = `e-taskboard 處理任務面板任務 \$\{task\.identifier\}，並同步進度狀態。`/,
   );
   assert.doesNotMatch(webApp, /const prompt =/);
   assert.doesNotMatch(webApp, /skillName: "manage-taskboard"/);

@@ -263,7 +263,7 @@ export function TaskContextMenu({
     >
       <div className="context-menu-group">
         <MenuItem
-          label={text("状态", "Status")}
+          label={text("狀態", "Status")}
           icon={<LinearIcon name="status" />}
           shortcut="S"
           submenu="status"
@@ -289,7 +289,7 @@ export function TaskContextMenu({
         </MenuItem>
 
         <MenuItem
-          label={text("优先级", "Priority")}
+          label={text("優先順序", "Priority")}
           icon={<LinearPriorityIcon priority={task.priority} />}
           shortcut="P"
           submenu="priority"
@@ -315,7 +315,7 @@ export function TaskContextMenu({
         </MenuItem>
 
         <MenuItem
-          label={text("标签", "Labels")}
+          label={text("標籤", "Labels")}
           icon={<LinearIcon name="label" />}
           shortcut="L"
           submenu="labels"
@@ -348,11 +348,11 @@ export function TaskContextMenu({
                   />
                 );
               }) : (
-                <MenuItem label={text("暂无可用标签", "No labels available")} disabled />
+                <MenuItem label={text("暫無可用標籤", "No labels available")} disabled />
               )}
               <div className="context-menu-divider" role="separator" />
               <MenuItem
-                label={text("在编辑器中管理…", "Manage in editor…")}
+                label={text("在編輯器中管理…", "Manage in editor…")}
                 icon={<LinearIcon name="write" />}
                 onClick={() => closeThen(() => onEdit(task))}
               />
@@ -365,20 +365,20 @@ export function TaskContextMenu({
 
       <div className="context-menu-group">
         <MenuItem
-          label={text("编辑议题", "Edit issue")}
+          label={text("編輯議題", "Edit issue")}
           icon={<LinearIcon name="write" />}
           shortcut="↵"
           onPointerEnter={closeSubmenu}
           onClick={() => closeThen(() => onEdit(task))}
         />
         <MenuItem
-          label={text("创建副本", "Create copy")}
+          label={text("建立副本", "Create copy")}
           icon={<LinearIcon name="copy" />}
           onPointerEnter={closeSubmenu}
           onClick={() => closeThen(() => onDuplicate(task))}
         />
         <MenuItem
-          label={text("复制", "Copy")}
+          label={text("複製", "Copy")}
           icon={<LinearIcon name="copy" />}
           submenu="copy"
           submenuOpen={submenu === "copy"}
@@ -388,31 +388,31 @@ export function TaskContextMenu({
           {submenu === "copy" && (
             <div className="context-submenu" role="menu" data-submenu-panel="copy" style={{ "--submenu-shift": `${submenuShift}px` } as CSSProperties}>
               <MenuItem
-                label={text("复制议题 ID", "Copy issue ID")}
+                label={text("複製議題 ID", "Copy issue ID")}
                 onClick={() => closeThen(() => onCopy(
                   task.identifier,
-                  text(`${task.identifier} 已复制。`, `${task.identifier} copied.`),
+                  text(`${task.identifier} 已複製。`, `${task.identifier} copied.`),
                 ))}
               />
               <MenuItem
-                label={text("复制标题", "Copy title")}
+                label={text("複製標題", "Copy title")}
                 onClick={() => closeThen(() => onCopy(
                   task.title,
-                  text("议题标题已复制。", "Issue title copied."),
+                  text("議題標題已複製。", "Issue title copied."),
                 ))}
               />
               <MenuItem
-                label={text("复制 Markdown", "Copy Markdown")}
+                label={text("複製 Markdown", "Copy Markdown")}
                 onClick={() => closeThen(() => onCopy(
                   `**${task.identifier}** ${task.title}`,
-                  text("Markdown 已复制。", "Markdown copied."),
+                  text("Markdown 已複製。", "Markdown copied."),
                 ))}
               />
             </div>
           )}
         </MenuItem>
         <MenuItem
-          label={text("在对话中打开", "Open in conversation")}
+          label={text("在對話中開啟", "Open in conversation")}
           icon={<LinearIcon name="link" />}
           onPointerEnter={closeSubmenu}
           onClick={() => closeThen(() => onOpenInThread(task))}
@@ -423,7 +423,7 @@ export function TaskContextMenu({
 
       <div className="context-menu-group">
         <MenuItem
-          label={text("归档议题", "Archive issue")}
+          label={text("歸檔議題", "Archive issue")}
           icon={<LinearIcon name="trash" />}
           shortcut="⌘⌫"
           danger

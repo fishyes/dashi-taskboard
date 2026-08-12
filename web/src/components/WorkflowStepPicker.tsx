@@ -55,12 +55,12 @@ export function WorkflowStepPicker({ items, onSelect, onClose }: WorkflowStepPic
       <section
         className="workflow-step-picker"
         role="dialog"
-        aria-label={text("添加流程步骤", "Add workflow step")}
+        aria-label={text("新增流程步驟", "Add workflow step")}
         aria-modal="true"
       >
         <header className="workflow-step-picker-header">
-          <strong>{text("添加流程步骤", "Add workflow step")}</strong>
-          <button type="button" aria-label={text("关闭", "Close")} onClick={onClose}>
+          <strong>{text("新增流程步驟", "Add workflow step")}</strong>
+          <button type="button" aria-label={text("關閉", "Close")} onClick={onClose}>
             <LinearIcon name="close" />
           </button>
         </header>
@@ -71,8 +71,8 @@ export function WorkflowStepPicker({ items, onSelect, onClose }: WorkflowStepPic
             ref={searchRef}
             type="search"
             value={query}
-            placeholder={text("搜索应用或动作…", "Search apps or actions…")}
-            aria-label={text("搜索应用或动作", "Search apps or actions")}
+            placeholder={text("搜尋應用程式或動作…", "Search apps or actions…")}
+            aria-label={text("搜尋應用程式或動作", "Search apps or actions")}
             onChange={(event) => setQuery(event.target.value)}
           />
         </label>
@@ -108,7 +108,7 @@ export function WorkflowStepPicker({ items, onSelect, onClose }: WorkflowStepPic
           ))}
           {filteredItems.length === 0 && (
             <p className="workflow-step-picker-empty">
-              {text("没有匹配的应用或动作", "No matching apps or actions")}
+              {text("沒有相符的應用程式或動作", "No matching apps or actions")}
             </p>
           )}
         </div>

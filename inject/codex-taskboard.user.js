@@ -28,28 +28,35 @@
   const HOST_HEARTBEAT_MAX_AGE_MS = 8_000;
   const MACOS_TITLEBAR_SAFE_LEFT = 80;
   const FRAME_REFRESH_PARAM = "__codex_taskboard_refresh";
-  const PLUGIN_LABELS = ["插件", "外掛程式", "plugins"];
+  // 簡體別名僅用於辨識不同語系的 Codex 主程式，不會顯示在任務面板介面。
+  const PLUGIN_LABELS = ["外掛", "外掛程式", "插件", "plugins"];
   const NATIVE_PAGE_LABELS = [
+    "新增任務",
     "新建任务",
+    "新對話",
     "新对话",
     "新聊天",
     "new task",
     "new chat",
+    "拉取請求",
     "拉取请求",
     "pull request",
     "pull requests",
+    "站點",
     "站点",
     "網站",
+    "网站",
     "sites",
     "已安排",
     "已排程",
     "scheduled",
-    "插件",
+    "外掛",
     "外掛程式",
+    "插件",
     "plugins",
   ];
-  const PROJECT_SECTION_LABELS = ["projects", "项目"];
-  const TASK_SECTION_LABELS = ["tasks", "任务", "chats", "对话"];
+  const PROJECT_SECTION_LABELS = ["projects", "專案", "项目"];
+  const TASK_SECTION_LABELS = ["tasks", "任務", "任务", "chats", "對話", "对话"];
 
   const previous = window[SENTINEL_KEY];
   if (previous?.sourceHash === SOURCE_HASH && typeof previous.refresh === "function") {
@@ -323,10 +330,10 @@
 
   function syncEntryText(button = entry) {
     if (!button) return;
-    button.setAttribute("aria-label", hostText("打开任务面板", "Open Taskboard"));
-    button.setAttribute("title", hostText("任务面板", "Taskboard"));
-    if (entryLabel) entryLabel.textContent = hostText("任务面板", "Taskboard");
-    else button.textContent = hostText("任务面板", "Taskboard");
+    button.setAttribute("aria-label", hostText("開啟任務面板", "Open Taskboard"));
+    button.setAttribute("title", hostText("任務面板", "Taskboard"));
+    if (entryLabel) entryLabel.textContent = hostText("任務面板", "Taskboard");
+    else button.textContent = hostText("任務面板", "Taskboard");
   }
 
   function syncEntryState() {
@@ -539,7 +546,7 @@
 
   function nativeSidebarCollapsed() {
     const label = normalizedLabel(nativeSidebarTrigger()?.getAttribute("aria-label"));
-    return label.startsWith("显示") || label.startsWith("show ");
+    return label.startsWith("顯示") || label.startsWith("show ");
   }
 
   function sidebarThreadRow(threadId) {
@@ -577,7 +584,7 @@
     if (threadRow?.querySelector(".animate-spin")) return true;
     const running = Array.from(document.querySelectorAll("button[aria-label]")).some((button) => {
       const label = normalizedLabel(button.getAttribute("aria-label"));
-      return ["停止", "停止生成", "stop", "stop generating"].includes(label);
+      return ["停止", "停止產生", "停止生成", "stop", "stop generating"].includes(label);
     });
     const activeThreadId = normalizeThreadId(
       activeThreadRow()?.getAttribute("data-app-action-sidebar-thread-id"),
@@ -635,6 +642,7 @@
     const profileButton = avatar?.closest("button")
       || Array.from(document.querySelectorAll('button[aria-haspopup="menu"]')).find((button) => (
         normalizedLabel(button.getAttribute("aria-label")).includes("profile")
+        || normalizedLabel(button.getAttribute("aria-label")).includes("個人資料")
         || normalizedLabel(button.getAttribute("aria-label")).includes("个人资料")
       ));
     const name = profileButton?.textContent?.replace(/\s+/g, " ").trim();
@@ -792,7 +800,7 @@
       await new Promise((resolve) => window.setTimeout(resolve, 80));
     }
     throw new Error(hostText(
-      "Codex 对话输入框没有写入任务编号",
+      "Codex 對話輸入框沒有寫入任務編號",
       "The issue identifier was not written to the Codex composer",
     ));
   }
@@ -815,7 +823,7 @@
       const bridge = window.electronBridge;
       if (!bridge || typeof bridge.sendMessageFromView !== "function") {
         throw new Error(hostText(
-          "当前 Codex 版本没有提供原生对话导航能力",
+          "目前 Codex 版本沒有提供原生對話導覽能力",
           "This Codex version does not provide native conversation navigation",
         ));
       }
@@ -862,7 +870,7 @@
           taskId,
           error: error instanceof Error
             ? error.message
-            : hostText("无法创建 Codex 对话", "Could not create the Codex conversation"),
+            : hostText("無法建立 Codex 對話", "Could not create the Codex conversation"),
         },
       });
     } finally {
@@ -897,7 +905,7 @@
         payload: {
           requestId,
           ok: false,
-          error: hostText("仅本地任务面板可用", "Available only in the local Taskboard"),
+          error: hostText("僅本機任務面板可用", "Available only in the local Taskboard"),
         },
       });
       return;
@@ -928,7 +936,7 @@
           ok: false,
           error: error instanceof Error
             ? error.message
-            : hostText("Codex 自动任务操作失败", "The Codex automation operation failed"),
+            : hostText("Codex 自動任務操作失敗", "The Codex automation operation failed"),
         },
       });
     }
@@ -1033,7 +1041,7 @@
     section.hidden = true;
     section.setAttribute(OWNED_ATTRIBUTE, "true");
     section.setAttribute("role", "region");
-    section.setAttribute("aria-label", hostText("任务面板", "Taskboard"));
+    section.setAttribute("aria-label", hostText("任務面板", "Taskboard"));
 
     status = document.createElement("div");
     status.id = STATUS_ID;
@@ -1072,7 +1080,7 @@
 
   function renderLoading() {
     if (!status) return;
-    status.replaceChildren(document.createTextNode(hostText("正在启动任务面板…", "Starting Taskboard…")));
+    status.replaceChildren(document.createTextNode(hostText("正在啟動任務面板…", "Starting Taskboard…")));
     status.hidden = false;
     if (frame) frame.hidden = true;
   }
@@ -1100,7 +1108,7 @@
     text.textContent = hostErrorText(loadError);
     const retry = document.createElement("button");
     retry.type = "button";
-    retry.textContent = hostText("重新启动", "Restart");
+    retry.textContent = hostText("重新啟動", "Restart");
     retry.addEventListener("click", openTaskboard, { once: true });
     content.append(text, retry);
     status.replaceChildren(content);
@@ -1113,8 +1121,8 @@
     if (hostUiLanguage === language) return;
     hostUiLanguage = language;
     syncEntryText();
-    if (page) page.setAttribute("aria-label", hostText("任务面板", "Taskboard"));
-    if (frame) frame.title = hostText("任务面板", "Taskboard");
+    if (page) page.setAttribute("aria-label", hostText("任務面板", "Taskboard"));
+    if (frame) frame.title = hostText("任務面板", "Taskboard");
     if (statusView === "loading") renderLoading();
     else if (statusView === "error") renderLoadError();
   }
@@ -1135,7 +1143,7 @@
         reject,
         timer: window.setTimeout(() => {
           frameReadyWaiters.delete(waiter);
-          reject(hostError("任务面板页面加载超时", "Taskboard page load timed out"));
+          reject(hostError("任務面板頁面載入超時", "Taskboard page load timed out"));
         }, FRAME_READY_TIMEOUT_MS),
       };
       frameReadyWaiters.add(waiter);
@@ -1143,7 +1151,7 @@
   }
 
   function loadTaskboardFrame(cacheBust = false) {
-    cancelFrameReadyWaiters(hostError("任务面板正在重新加载", "Taskboard is reloading"));
+    cancelFrameReadyWaiters(hostError("任務面板正在重新載入", "Taskboard is reloading"));
     frame?.remove();
     frame = null;
     frameTaskboardUrl = "";
@@ -1169,7 +1177,7 @@
     nextFrame.hidden = true;
     nextFrame.setAttribute("sandbox", "allow-scripts allow-forms allow-modals allow-downloads");
     nextFrame.src = "about:blank";
-    nextFrame.title = hostText("任务面板", "Taskboard");
+    nextFrame.title = hostText("任務面板", "Taskboard");
     nextFrame.referrerPolicy = "no-referrer";
     nextFrame.setAttribute("allow", "clipboard-read; clipboard-write");
     nextFrame.addEventListener("load", challengeFrameDocument);
@@ -1218,7 +1226,7 @@
   function requestHost(action, payload = {}) {
     if (!hasLiveHostBinding()) {
       return Promise.reject(hostError(
-        "Taskboard 启动器未运行，无法操作 Codex 对话输入框",
+        "Taskboard 啟動器未執行，無法操作 Codex 對話輸入框",
         "The Taskboard launcher is not running, so the Codex composer is unavailable",
       ));
     }
@@ -1227,7 +1235,7 @@
     return new Promise((resolve, reject) => {
       const timeout = window.setTimeout(() => {
         hostRequests.delete(id);
-        reject(hostError("任务面板启动器没有响应", "The Taskboard launcher did not respond"));
+        reject(hostError("任務面板啟動器沒有回應", "The Taskboard launcher did not respond"));
       }, HOST_REQUEST_TIMEOUT_MS);
       hostRequests.set(id, { resolve, reject, timeout });
       try {
@@ -1283,7 +1291,7 @@
     if (response.ok) pending.resolve(response);
     else pending.reject(response.error
       ? new Error(response.error)
-      : hostError("任务面板服务启动失败", "The Taskboard service failed to start"));
+      : hostError("任務面板服務啟動失敗", "The Taskboard service failed to start"));
   }
 
   function onHostBridgeMessage(event) {
@@ -1336,7 +1344,7 @@
       showLoadError(bindingAvailable
         ? error
         : hostError(
-          "任务面板服务未就绪。请保持 Taskboard 启动器运行后重试。",
+          "任務面板服務未就緒。請保持 Taskboard 啟動器執行後重試。",
           "The Taskboard service is not ready. Keep the Taskboard launcher running and try again.",
         ));
     }
@@ -1506,10 +1514,10 @@
     hostContextTimer = null;
     observer?.disconnect();
     observer = null;
-    cancelFrameReadyWaiters(hostError("任务面板已关闭", "Taskboard was closed"));
+    cancelFrameReadyWaiters(hostError("任務面板已關閉", "Taskboard was closed"));
     hostRequests.forEach(({ reject, timeout }) => {
       window.clearTimeout(timeout);
-      reject(hostError("任务面板已关闭", "Taskboard was closed"));
+      reject(hostError("任務面板已關閉", "Taskboard was closed"));
     });
     hostRequests.clear();
     pendingThreadCreation = null;

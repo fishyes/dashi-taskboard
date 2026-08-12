@@ -14,11 +14,11 @@ export const STATUS_DETAILS: Record<
   TaskStatus,
   { label: string; tone: string }
 > = {
-  backlog: { label: "待立项", tone: "backlog" },
-  todo: { label: "等待认领", tone: "todo" },
-  in_progress: { label: "处理中", tone: "progress" },
-  in_review: { label: "等你确认", tone: "review" },
-  blocked: { label: "遇到阻碍", tone: "blocked" },
+  backlog: { label: "待規劃", tone: "backlog" },
+  todo: { label: "待認領", tone: "todo" },
+  in_progress: { label: "處理中", tone: "progress" },
+  in_review: { label: "等你確認", tone: "review" },
+  blocked: { label: "遇到阻礙", tone: "blocked" },
   done: { label: "完成", tone: "done" },
   canceled: { label: "取消", tone: "canceled" },
 };
@@ -190,8 +190,8 @@ export function BoardColumn({
             type="button"
             className="icon-button add-task-button"
             onClick={() => onCreate(status)}
-            aria-label={text(`在${label}中新建议题`, `Create issue in ${label}`)}
-            title={text(`添加到${label}`, `Add to ${label}`)}
+            aria-label={text(`在${label}中新增議題`, `Create issue in ${label}`)}
+            title={text(`新增到${label}`, `Add to ${label}`)}
           >
             <TaskboardIcon name={COLUMN_ADD_ICONS[status] ?? "columnAdd"} />
           </button>

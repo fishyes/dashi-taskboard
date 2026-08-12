@@ -40,7 +40,7 @@ test("derived split, empty and merge anchors never render duplicate add-step but
     node.indexOf("if (parentId)"),
   );
   assert.match(anchors, /workflow-flow-anchor[\s\S]*?<Handle/);
-  assert.doesNotMatch(anchors, /<button|添加步骤|onAddBranch/);
+  assert.doesNotMatch(anchors, /<button|新增步驟|onAddBranch/);
   assert.match(
     board,
     /layout\.virtualNodes\.map[\s\S]*?style: \{ width: END_STEP_HEIGHT, height: END_STEP_HEIGHT \}/,

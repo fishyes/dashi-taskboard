@@ -19,30 +19,30 @@ test("workflow editing is a constrained vertical execution sequence instead of a
   assert.match(board, /nodeOrigin=\{TOP_CENTER_ORIGIN\}/);
   assert.match(board, /nodesDraggable=\{false\}/);
   assert.match(board, /nodesConnectable=\{false\}/);
-  assert.match(board, /aria-label=\{text\("流程编排区", "Workflow canvas"\)\}/);
+  assert.match(board, /aria-label=\{text\("流程編排區", "Workflow canvas"\)\}/);
   assert.match(board, /instance\.setCenter\(0, 220, \{ zoom: 1 \}\)/);
   assert.doesNotMatch(board, /\n\s+fitView\n/);
-  assert.doesNotMatch(board, /MiniMap|onConnect=|aria-label="节点库"|workflow-library/);
+  assert.doesNotMatch(board, /MiniMap|onConnect=|aria-label="節點庫"|workflow-library/);
   assert.doesNotMatch(styles, /workflow-minimap|workflow-library-width|workflow-grid-dot/);
 });
 
 test("workflow viewport controls are only shown in the bottom-left control group", () => {
   assert.match(board, /<Controls[\s\S]*?position="bottom-left"/);
-  assert.doesNotMatch(board, /aria-label="适应流程视图"/);
+  assert.doesNotMatch(board, /aria-label="適應流程檢視"/);
   assert.doesNotMatch(styles, /\.workflow-toolbar-status > button/);
 });
 
 test("steps are inserted from the connector or sequence end through a searchable chooser", () => {
   assert.match(board, /const openStepPicker = useCallback/);
-  assert.match(board, /aria-label=\{text\("添加第一个步骤", "Add the first step"\)\}/);
+  assert.match(board, /aria-label=\{text\("新增第一個步驟", "Add the first step"\)\}/);
   assert.match(
     board,
     /layout\.edges\.map[\s\S]*?edge\.data\.insertion[\s\S]*?openStepPicker/,
   );
   assert.match(board, /<WorkflowStepPicker/);
   assert.match(picker, /role="dialog"/);
-  assert.match(picker, /aria-label=\{text\("添加流程步骤", "Add workflow step"\)\}/);
-  assert.match(picker, /placeholder=\{text\("搜索应用或动作…", "Search apps or actions…"\)\}/);
+  assert.match(picker, /aria-label=\{text\("新增流程步驟", "Add workflow step"\)\}/);
+  assert.match(picker, /placeholder=\{text\("搜尋應用程式或動作…", "Search apps or actions…"\)\}/);
   assert.match(picker, /WORKFLOW_GROUPS\.filter/);
   assert.match(picker, /onSelect\(item\)/);
   assert.match(styles, /\.workflow-step-picker \{/);
@@ -52,18 +52,18 @@ test("steps are inserted from the connector or sequence end through a searchable
 test("RSS, pull request and repository issue submissions are distinct trigger choices", () => {
   assert.match(
     catalog,
-    /group: "触发器",[\s\S]*?title: "RSS 订阅更新"[\s\S]*?kind: "rss-trigger"/,
+    /group: "觸發器",[\s\S]*?title: "RSS 訂閱更新"[\s\S]*?kind: "rss-trigger"/,
   );
   assert.match(
     catalog,
-    /group: "触发器",[\s\S]*?title: "PR 提交"[\s\S]*?kind: "pull-request-submitted-trigger"/,
+    /group: "觸發器",[\s\S]*?title: "PR 提交"[\s\S]*?kind: "pull-request-submitted-trigger"/,
   );
   assert.match(
     catalog,
-    /group: "触发器",[\s\S]*?title: "Issue 提交"[\s\S]*?kind: "repository-issue-submitted-trigger"/,
+    /group: "觸發器",[\s\S]*?title: "Issue 提交"[\s\S]*?kind: "repository-issue-submitted-trigger"/,
   );
   assert.match(catalog, /kind: "issue-trigger"/);
-  assert.match(board, /rootStepIds\.length === 0[\s\S]*?item\.group === "触发器"/);
+  assert.match(board, /rootStepIds\.length === 0[\s\S]*?item\.group === "觸發器"/);
 });
 
 test("every trigger kind stays pinned first and cannot be deleted or duplicated", () => {
@@ -93,7 +93,7 @@ test("every trigger kind stays pinned first and cannot be deleted or duplicated"
     /Workflow trigger must stay first/,
   );
   assert.doesNotMatch(board, /data\.kind === "issue-trigger"/);
-  assert.match(node, /canDuplicate[\s\S]*?\{canDuplicate && \([\s\S]*?>\{text\("复制步骤", "Duplicate step"\)\}</);
+  assert.match(node, /canDuplicate[\s\S]*?\{canDuplicate && \([\s\S]*?>\{text\("複製步驟", "Duplicate step"\)\}</);
   assert.match(node, /canDuplicate=\{!data\.isTrigger && data\.kind !== "condition"\}/);
 });
 
@@ -104,7 +104,7 @@ test("RSS trigger stores one feed address and derives its configured source disp
   );
   assert.match(
     inspector,
-    /data\.kind === "rss-trigger"[\s\S]*?aria-label=\{text\("RSS 订阅地址", "RSS feed URL"\)\}[\s\S]*?onChange=\{\(event\) => onChange\(\{ rssFeedUrl: event\.target\.value \}\)\}/,
+    /data\.kind === "rss-trigger"[\s\S]*?aria-label=\{text\("RSS 訂閱位址", "RSS feed URL"\)\}[\s\S]*?onChange=\{\(event\) => onChange\(\{ rssFeedUrl: event\.target\.value \}\)\}/,
   );
   assert.match(catalog, /if \(data\.kind === "rss-trigger"\)[\s\S]*?rssFeedUrl/);
   assert.match(
@@ -117,11 +117,11 @@ test("RSS trigger stores one feed address and derives its configured source disp
 test("repository submission triggers use current project context without fake infrastructure", () => {
   assert.match(
     catalog,
-    /kind: "pull-request-submitted-trigger"[\s\S]*?meta: "当前项目仓库 · Pull Request"/,
+    /kind: "pull-request-submitted-trigger"[\s\S]*?meta: "目前專案儲存庫 · Pull Request"/,
   );
   assert.match(
     catalog,
-    /kind: "repository-issue-submitted-trigger"[\s\S]*?meta: "当前项目仓库 · Issue"/,
+    /kind: "repository-issue-submitted-trigger"[\s\S]*?meta: "目前專案儲存庫 · Issue"/,
   );
   assert.doesNotMatch(
     catalog,
@@ -129,14 +129,14 @@ test("repository submission triggers use current project context without fake in
   );
 });
 
-test("Git 状态 is a distinct current-project trigger without fake execution infrastructure", () => {
+test("Git 狀態 is a distinct current-project trigger without fake execution infrastructure", () => {
   assert.match(
     catalog,
-    /group: "触发器",[\s\S]*?title: "Git 状态"[\s\S]*?kind: "git-status-trigger"[\s\S]*?title: "Git 状态"/,
+    /group: "觸發器",[\s\S]*?title: "Git 狀態"[\s\S]*?kind: "git-status-trigger"[\s\S]*?title: "Git 狀態"/,
   );
   assert.match(
     catalog,
-    /kind: "git-status-trigger"[\s\S]*?description: "当前项目的 Git 工作区状态发生变化时触发"[\s\S]*?meta: "当前项目 · Git 工作区"[\s\S]*?logo: GIT_LOGO/,
+    /kind: "git-status-trigger"[\s\S]*?description: "目前專案的 Git 工作區狀態發生變化時觸發"[\s\S]*?meta: "目前專案 · Git 工作區"[\s\S]*?logo: GIT_LOGO/,
   );
   assert.match(
     controlFlow,
@@ -144,7 +144,7 @@ test("Git 状态 is a distinct current-project trigger without fake execution in
   );
   assert.match(
     inspector,
-    /<div[\s\S]*?className="workflow-inspector-tabs"[\s\S]*?>\{text\("设置", "Settings"\)\}<[\s\S]*?>\{text\("配置", "Configuration"\)\}<[\s\S]*?aria-label=\{text\("额外说明", "Additional instructions"\)\}/,
+    /<div[\s\S]*?className="workflow-inspector-tabs"[\s\S]*?>\{text\("設定", "Settings"\)\}<[\s\S]*?>\{text\("設定", "Configuration"\)\}<[\s\S]*?aria-label=\{text\("額外說明", "Additional instructions"\)\}/,
   );
   assert.doesNotMatch(inspector, /data\.kind === "git-status-trigger"/);
   assert.doesNotMatch(
@@ -168,14 +168,14 @@ test("Git 状态 is a distinct current-project trigger without fake execution in
 
 test("condition steps keep one comparison rule and own two persisted outcome paths", () => {
   assert.match(catalog, /\| "流程控制"/);
-  assert.match(catalog, /"触发器",\s+"流程控制"/);
+  assert.match(catalog, /"觸發器",\s+"流程控制"/);
   assert.match(
     catalog,
-    /group: "流程控制",[\s\S]*?title: "条件判断"[\s\S]*?description: "根据判断结果进入对应路径"[\s\S]*?kind: "condition"[\s\S]*?description: "根据判断结果进入对应路径"[\s\S]*?conditionField: "issue-status"[\s\S]*?conditionOperator: "equals"[\s\S]*?conditionValue: "todo"/,
+    /group: "流程控制",[\s\S]*?title: "條件判斷"[\s\S]*?description: "根據判斷結果進入對應路徑"[\s\S]*?kind: "condition"[\s\S]*?description: "根據判斷結果進入對應路徑"[\s\S]*?conditionField: "issue-status"[\s\S]*?conditionOperator: "equals"[\s\S]*?conditionValue: "todo"/,
   );
   assert.match(
     inspector,
-    /data\.kind === "condition"[\s\S]*?aria-label=\{text\("判断字段", "Condition field"\)\}[\s\S]*?aria-label=\{text\("运算符", "Operator"\)\}[\s\S]*?aria-label=\{text\("比较值", "Comparison value"\)\}/,
+    /data\.kind === "condition"[\s\S]*?aria-label=\{text\("判斷欄位", "Condition field"\)\}[\s\S]*?aria-label=\{text\("運算子", "Operator"\)\}[\s\S]*?aria-label=\{text\("比較值", "Comparison value"\)\}/,
   );
   assert.match(catalog, /if \(data\.kind === "condition"\)[\s\S]*?formatActionTitle/);
   assert.match(controlFlow, /branches: \{[\s\S]*?true: \{ items: trueItems \}[\s\S]*?false: \{ items: falseItems \}/);
@@ -201,7 +201,7 @@ test("condition branch pickers use recursive sequence refs and allow nested cond
   );
   assert.match(
     board,
-    /item\.group !== "触发器"/,
+    /item\.group !== "觸發器"/,
   );
   assert.doesNotMatch(board, /item\.data\.kind !== "condition"/);
 });
@@ -248,7 +248,7 @@ test("condition fields expose only meaningful operators and value controls", () 
   );
   assert.match(
     inspector,
-    /\(conditionField === "issue-labels" \|\| conditionField === "upstream-output"\)[\s\S]*?<input[\s\S]*?aria-label=\{text\("比较值", "Comparison value"\)\}/,
+    /\(conditionField === "issue-labels" \|\| conditionField === "upstream-output"\)[\s\S]*?<input[\s\S]*?aria-label=\{text\("比較值", "Comparison value"\)\}/,
   );
 });
 
@@ -259,11 +259,11 @@ test("Feishu message keeps Feishu docs and configures exactly one real delivery 
   );
   assert.match(
     catalog,
-    /FEISHU_MESSAGE_RECIPIENTS = \[[\s\S]*?value: "self", label: "发送给自己"[\s\S]*?value: "user", label: "发送给特定用户"[\s\S]*?value: "chat", label: "发送到群聊"[\s\S]*?\] as const/,
+    /FEISHU_MESSAGE_RECIPIENTS = \[[\s\S]*?value: "self", label: "傳送給自己"[\s\S]*?value: "user", label: "傳送給特定使用者"[\s\S]*?value: "chat", label: "傳送到群聊"[\s\S]*?\] as const/,
   );
   assert.match(
     inspector,
-    /data\.kind === "feishu-message"[\s\S]*?aria-label=\{text\("飞书消息发送对象", "Feishu message recipient"\)\}[\s\S]*?data\.feishuRecipientType === "user"[\s\S]*?aria-label=\{text\("飞书用户", "Feishu user"\)\}[\s\S]*?data\.feishuRecipientType === "chat"[\s\S]*?aria-label=\{text\("飞书群聊", "Feishu chat"\)\}/,
+    /data\.kind === "feishu-message"[\s\S]*?aria-label=\{text\("飛書訊息傳送物件", "Feishu message recipient"\)\}[\s\S]*?data\.feishuRecipientType === "user"[\s\S]*?aria-label=\{text\("飛書使用者", "Feishu user"\)\}[\s\S]*?data\.feishuRecipientType === "chat"[\s\S]*?aria-label=\{text\("飛書群聊", "Feishu chat"\)\}/,
   );
   assert.doesNotMatch(inspector, /localStorage/);
 });
@@ -271,7 +271,7 @@ test("Feishu message keeps Feishu docs and configures exactly one real delivery 
 test("add ISSUE is a separate result step beside issue update", () => {
   assert.match(
     catalog,
-    /group: "结果",[\s\S]*?title: "添加 ISSUE"[\s\S]*?kind: "issue-create"[\s\S]*?title: "添加 ISSUE"[\s\S]*?icon: "createIssue"/,
+    /group: "結果",[\s\S]*?title: "新增 ISSUE"[\s\S]*?kind: "issue-create"[\s\S]*?title: "新增 ISSUE"[\s\S]*?icon: "createIssue"/,
   );
   assert.match(catalog, /kind: "issue-update"/);
   assert.match(picker, /onSelect\(item\)/);
@@ -291,22 +291,22 @@ test("add ISSUE owns independent creation fields", () => {
 });
 
 test("add ISSUE keeps shared inspector settings and limits its configuration to creation inputs", () => {
-  assert.match(inspector, /<div[\s\S]*?className="workflow-inspector-tabs"[\s\S]*?>\{text\("设置", "Settings"\)\}<[\s\S]*?>\{text\("配置", "Configuration"\)\}</);
+  assert.match(inspector, /<div[\s\S]*?className="workflow-inspector-tabs"[\s\S]*?>\{text\("設定", "Settings"\)\}<[\s\S]*?>\{text\("設定", "Configuration"\)\}</);
   assert.match(
     inspector,
-    /\{activeTab === "settings" \? \([\s\S]*?aria-label=\{text\("额外说明", "Additional instructions"\)\}[\s\S]*?text\("当前项目", "Current project"\)/,
+    /\{activeTab === "settings" \? \([\s\S]*?aria-label=\{text\("額外說明", "Additional instructions"\)\}[\s\S]*?text\("目前專案", "Current project"\)/,
   );
   assert.doesNotMatch(inspector, /data\.kind !== "issue-create" &&/);
   assert.doesNotMatch(inspector, /data\.kind === "issue-create" \? \(/);
   const createIssueInspector = inspector.match(
     /data\.kind === "issue-create" && \([\s\S]*?\n          \)\}/,
   )?.[0] ?? "";
-  assert.match(createIssueInspector, /aria-label=\{text\("ISSUE 标题", "Issue title"\)\}/);
+  assert.match(createIssueInspector, /aria-label=\{text\("ISSUE 標題", "Issue title"\)\}/);
   assert.match(createIssueInspector, /aria-label=\{text\("ISSUE 描述", "Issue description"\)\}/);
-  assert.match(createIssueInspector, /aria-label=\{text\("ISSUE 初始状态", "Issue initial status"\)\}[\s\S]*?ISSUE_STATUSES\.map/);
-  assert.match(createIssueInspector, /aria-label=\{text\("ISSUE 优先级", "Issue priority"\)\}[\s\S]*?ISSUE_PRIORITIES\.map/);
-  assert.match(createIssueInspector, /aria-label=\{text\("ISSUE 标签", "Issue labels"\)\}/);
-  assert.doesNotMatch(createIssueInspector, /当前项目|projectName|property-project/);
+  assert.match(createIssueInspector, /aria-label=\{text\("ISSUE 初始狀態", "Issue initial status"\)\}[\s\S]*?ISSUE_STATUSES\.map/);
+  assert.match(createIssueInspector, /aria-label=\{text\("ISSUE 優先順序", "Issue priority"\)\}[\s\S]*?ISSUE_PRIORITIES\.map/);
+  assert.match(createIssueInspector, /aria-label=\{text\("ISSUE 標籤", "Issue labels"\)\}/);
+  assert.doesNotMatch(createIssueInspector, /目前專案|projectName|property-project/);
 });
 
 test("add ISSUE title, meta and configured state reflect draft data without executing", () => {
@@ -322,7 +322,7 @@ test("add ISSUE title, meta and configured state reflect draft data without exec
     catalog,
     /if \(data\.kind === "issue-create"\)[\s\S]*?Boolean\(data\.createIssueTitle\?\.trim\(\)\)/,
   );
-  assert.doesNotMatch(catalog, /issueCreated|createdIssueId|创建成功/);
+  assert.doesNotMatch(catalog, /issueCreated|createdIssueId|建立成功/);
 });
 
 test("add ISSUE uses the shared node data and workspace persistence path", () => {
@@ -352,10 +352,10 @@ test("sequence steps reuse the original structured workflow node presentation", 
   assert.match(node, /Position\.Top/);
   assert.match(node, /Position\.Bottom/);
   assert.match(node, /data\.stepNumber/);
-  assert.match(node, /data\.configured[\s\S]*?\? text\("已配置", "Configured"\)[\s\S]*?: text\("需要配置", "Needs configuration"\)/);
-  assert.match(node, /aria-label=\{text\("步骤操作", "Step actions"\)\}/);
-  assert.match(node, />\{text\("复制步骤", "Duplicate step"\)\}</);
-  assert.match(node, />\{text\("删除步骤", "Delete step"\)\}</);
+  assert.match(node, /data\.configured[\s\S]*?\? text\("已設定", "Configured"\)[\s\S]*?: text\("需要設定", "Needs configuration"\)/);
+  assert.match(node, /aria-label=\{text\("步驟操作", "Step actions"\)\}/);
+  assert.match(node, />\{text\("複製步驟", "Duplicate step"\)\}</);
+  assert.match(node, />\{text\("刪除步驟", "Delete step"\)\}</);
   assert.match(node, /data\.onDuplicate/);
   assert.match(node, /data\.onDelete/);
   assert.match(node, /workflow-node-header/);
@@ -375,14 +375,14 @@ test("sequence steps reuse the original structured workflow node presentation", 
 
 test("step configuration is an on-demand right panel rather than a permanent three-column shell", () => {
   assert.match(board, /selectedNode && \([\s\S]*?<WorkflowInspector/);
-  assert.match(inspector, /aria-label=\{text\("关闭步骤配置", "Close step settings"\)\}/);
+  assert.match(inspector, /aria-label=\{text\("關閉步驟設定", "Close step settings"\)\}/);
   assert.match(inspector, /role="tablist"/);
-  assert.match(inspector, />\{text\("设置", "Settings"\)\}</);
-  assert.match(inspector, />\{text\("配置", "Configuration"\)\}</);
+  assert.match(inspector, />\{text\("設定", "Settings"\)\}</);
+  assert.match(inspector, />\{text\("設定", "Configuration"\)\}</);
   assert.match(board, /listWorkflowCapabilities/);
   assert.match(inspector, /可用 Skill/);
   assert.match(inspector, /可用 MCP Server/);
-  assert.match(inspector, /额外说明/);
+  assert.match(inspector, /額外說明/);
   assert.match(styles, /\.workflow-board\.has-inspector \{[\s\S]*?grid-template-columns: minmax\(0, 1fr\) 360px/);
   assert.doesNotMatch(styles, /\.workflow-board \{[\s\S]*?grid-template-columns: var\(--workflow-library-width\)/);
 });
@@ -390,7 +390,7 @@ test("step configuration is an on-demand right panel rather than a permanent thr
 test("planning remains a compact ordered container inside the lighter sequence", () => {
   assert.match(node, /data\.acceptsChildren/);
   assert.match(node, /data\.onAddChild/);
-  assert.match(node, /aria-label=\{text\("向执行计划添加步骤", "Add a step to the execution plan"\)\}/);
+  assert.match(node, /aria-label=\{text\("向執行計畫新增步驟", "Add a step to the execution plan"\)\}/);
   assert.match(node, /workflow-node-compact/);
   assert.match(board, /reorderPlanItem/);
   assert.match(styles, /\.workflow-plan-list \{/);
@@ -398,19 +398,19 @@ test("planning remains a compact ordered container inside the lighter sequence",
 });
 
 test("development steps are distinct reusable workflow choices", () => {
-  assert.match(catalog, /\| "开发"/);
-  assert.match(catalog, /"第三方集成",\s+"开发",\s+"规划"/);
+  assert.match(catalog, /\| "開發"/);
+  assert.match(catalog, /"第三方整合",\s+"開發",\s+"規劃"/);
   assert.match(
     catalog,
-    /group: "开发",[\s\S]*?title: "自定义代码"[\s\S]*?kind: "custom-code"[\s\S]*?codeRuntime: "shell"[\s\S]*?codeContent: ""/,
+    /group: "開發",[\s\S]*?title: "自訂程式碼"[\s\S]*?kind: "custom-code"[\s\S]*?codeRuntime: "shell"[\s\S]*?codeContent: ""/,
   );
   assert.match(
     catalog,
-    /group: "开发",[\s\S]*?title: "写测试"[\s\S]*?kind: "write-tests"/,
+    /group: "開發",[\s\S]*?title: "寫測試"[\s\S]*?kind: "write-tests"/,
   );
   assert.match(
     catalog,
-    /group: "开发",[\s\S]*?title: "运行测试"[\s\S]*?kind: "run-tests"[\s\S]*?testScope: "related"[\s\S]*?testCommand: ""/,
+    /group: "開發",[\s\S]*?title: "執行測試"[\s\S]*?kind: "run-tests"[\s\S]*?testScope: "related"[\s\S]*?testCommand: ""/,
   );
   assert.match(node, /\| "development"/);
   assert.match(board, /NESTABLE_TONES = new Set\(\[[\s\S]*?"development"[\s\S]*?\]\)/);
@@ -435,7 +435,7 @@ test("custom code stores an environment and source without executing it", () => 
   );
   assert.match(
     inspector,
-    /data\.kind === "custom-code"[\s\S]*?aria-label=\{text\("代码运行环境", "Code runtime"\)\}[\s\S]*?CODE_RUNTIMES\.map[\s\S]*?aria-label=\{text\("代码内容", "Code"\)\}[\s\S]*?onChange=\{\(event\) => onChange\(\{ codeContent: event\.target\.value \}\)\}/,
+    /data\.kind === "custom-code"[\s\S]*?aria-label=\{text\("程式碼執行環境", "Code runtime"\)\}[\s\S]*?CODE_RUNTIMES\.map[\s\S]*?aria-label=\{text\("程式碼內容", "Code"\)\}[\s\S]*?onChange=\{\(event\) => onChange\(\{ codeContent: event\.target\.value \}\)\}/,
   );
   assert.match(
     catalog,
@@ -443,7 +443,7 @@ test("custom code stores an environment and source without executing it", () => 
   );
   assert.match(
     catalog,
-    /capabilityNodeMeta[\s\S]*?if \(data\.kind === "custom-code"\)[\s\S]*?`运行环境 · \$\{optionLabel\(CODE_RUNTIMES, data\.codeRuntime \?\? "shell"\)\}`/,
+    /capabilityNodeMeta[\s\S]*?if \(data\.kind === "custom-code"\)[\s\S]*?`執行環境 · \$\{optionLabel\(CODE_RUNTIMES, data\.codeRuntime \?\? "shell"\)\}`/,
   );
   assert.doesNotMatch(
     inspector,
@@ -454,11 +454,11 @@ test("custom code stores an environment and source without executing it", () => 
 test("run tests supports related, all and custom command scopes", () => {
   assert.match(
     catalog,
-    /TEST_SCOPES = \[[\s\S]*?value: "related", label: "相关测试"[\s\S]*?value: "all", label: "全部测试"[\s\S]*?value: "custom", label: "自定义命令"/,
+    /TEST_SCOPES = \[[\s\S]*?value: "related", label: "相關測試"[\s\S]*?value: "all", label: "全部測試"[\s\S]*?value: "custom", label: "自訂命令"/,
   );
   assert.match(
     inspector,
-    /data\.kind === "run-tests"[\s\S]*?aria-label=\{text\("测试范围", "Test scope"\)\}[\s\S]*?TEST_SCOPES\.map[\s\S]*?data\.testScope === "custom"[\s\S]*?aria-label=\{text\("测试命令", "Test command"\)\}/,
+    /data\.kind === "run-tests"[\s\S]*?aria-label=\{text\("測試範圍", "Test scope"\)\}[\s\S]*?TEST_SCOPES\.map[\s\S]*?data\.testScope === "custom"[\s\S]*?aria-label=\{text\("測試命令", "Test command"\)\}/,
   );
   assert.match(
     catalog,
@@ -470,7 +470,7 @@ test("run tests supports related, all and custom command scopes", () => {
   );
   assert.match(
     catalog,
-    /capabilityNodeMeta[\s\S]*?if \(data\.kind === "run-tests"\)[\s\S]*?`测试范围 · \$\{optionLabel\(TEST_SCOPES, data\.testScope \?\? "related"\)\}`/,
+    /capabilityNodeMeta[\s\S]*?if \(data\.kind === "run-tests"\)[\s\S]*?`測試範圍 · \$\{optionLabel\(TEST_SCOPES, data\.testScope \?\? "related"\)\}`/,
   );
 });
 

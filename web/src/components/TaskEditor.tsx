@@ -124,7 +124,7 @@ function contextLabel(
 ): string {
   if (context.type === "branch") return context.branch;
   const folder = context.path.split(/[\\/]/).filter(Boolean).at(-1) ?? context.path;
-  return `${context.branch ?? text("分离 HEAD", "detached")} · ${folder}`;
+  return `${context.branch ?? text("分離 HEAD", "detached")} · ${folder}`;
 }
 
 export function TaskEditor({
@@ -221,7 +221,7 @@ export function TaskEditor({
     const cleanTitle = title.trim();
     if (!cleanTitle) {
       setError([
-        "请为议题填写一个简短、明确的标题。",
+        "請為議題填寫一個簡短、明確的標題。",
         "Enter a short, clear issue title.",
       ]);
       titleRef.current?.focus();
@@ -229,7 +229,7 @@ export function TaskEditor({
     }
     if (recurrence && !dueDate) {
       setError([
-        "重复议题需要先设置最早截止日期。",
+        "重複議題需要先設定最早截止日期。",
         "A recurring issue needs an initial due date.",
       ]);
       return;
@@ -259,13 +259,13 @@ export function TaskEditor({
     } catch (caught) {
       if (caught instanceof ApiError && caught.code === "VERSION_CONFLICT") {
         setError([
-          "这个议题已在其他位置发生变更，请关闭并刷新后重试。",
+          "這個議題已在其他位置發生變更，請關閉並重新整理後重試。",
           "This issue changed elsewhere. Close the editor, refresh, and try again.",
         ]);
       } else {
         setError(caught instanceof Error
           ? caught.message
-          : ["无法保存这个议题。", "Could not save this issue."]);
+          : ["無法儲存這個議題。", "Could not save this issue."]);
       }
     } finally {
       setSaving(false);
@@ -291,7 +291,7 @@ export function TaskEditor({
     const oversized = selected.find((file) => file.size > MAX_ATTACHMENT_SIZE);
     if (oversized) {
       setAttachmentError([
-        `“${oversized.name}” 超过 25 MB，无法上传。`,
+        `“${oversized.name}” 超過 25 MB，無法上傳。`,
         `“${oversized.name}” is larger than 25 MB and cannot be uploaded.`,
       ]);
       return;
@@ -356,15 +356,15 @@ export function TaskEditor({
       <form className={`task-form${task ? "" : " is-creating"}`} onSubmit={handleSubmit} onKeyDown={handleKeyDown}>
         <header className="dialog-header">
           <div className="dialog-context">
-            <strong id="task-dialog-title">{task ? task.identifier : text("新建议题", "New issue")}</strong>
+            <strong id="task-dialog-title">{task ? task.identifier : text("新增議題", "New issue")}</strong>
           </div>
           <div className="dialog-header-actions">
             <button
               type="button"
               className="icon-button dialog-expand"
               aria-label={expanded
-                ? text("收起编辑器", "Collapse editor")
-                : text("展开编辑器", "Expand editor")}
+                ? text("收起編輯器", "Collapse editor")
+                : text("展開編輯器", "Expand editor")}
               onClick={() => setExpanded((current) => !current)}
             >
               <LinearIcon name="expand" />
@@ -374,7 +374,7 @@ export function TaskEditor({
               className="icon-button dialog-close"
               onClick={cancelEditor}
               disabled={saving}
-              aria-label={text("关闭编辑器", "Close editor")}
+              aria-label={text("關閉編輯器", "Close editor")}
             >
               <LinearIcon name="close" />
             </button>
@@ -383,20 +383,20 @@ export function TaskEditor({
 
         <div className="form-body">
           <label className="composer-title">
-            <span className="sr-only">{text("标题", "Title")}</span>
-            <textarea ref={titleRef} rows={1} value={title} onChange={(event) => setTitle(event.target.value.replace(/\n/g, ""))} placeholder={text("议题标题", "Issue title")} maxLength={240} autoComplete="off" />
+            <span className="sr-only">{text("標題", "Title")}</span>
+            <textarea ref={titleRef} rows={1} value={title} onChange={(event) => setTitle(event.target.value.replace(/\n/g, ""))} placeholder={text("議題標題", "Issue title")} maxLength={240} autoComplete="off" />
           </label>
           {task ? (
             <label className="composer-description">
               <span className="sr-only">{text("描述", "Description")}</span>
-              <textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder={text("添加描述…", "Add description…")} rows={5} />
+              <textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder={text("新增描述…", "Add description…")} rows={5} />
             </label>
           ) : (
             <InlineMediaComposer
               ref={descriptionComposerRef}
               className="composer-description inline-media-description"
               segments={descriptionSegments}
-              placeholder={text("添加描述…", "Add description…")}
+              placeholder={text("新增描述…", "Add description…")}
               ariaLabel={text("描述", "Description")}
               disabled={saving}
               onChange={setDescriptionSegments}
@@ -408,8 +408,8 @@ export function TaskEditor({
             <PendingAttachments
               files={attachments}
               disabled={saving}
-              uploadLabel={text("保存后上传", "Upload after saving")}
-              ariaLabel={text("待上传附件", "Pending attachments")}
+              uploadLabel={text("儲存後上傳", "Upload after saving")}
+              ariaLabel={text("待上傳附件", "Pending attachments")}
               onRemove={(index) => setAttachments((current) => current.filter((_, itemIndex) => itemIndex !== index))}
             />
           )}
@@ -427,7 +427,7 @@ export function TaskEditor({
               }))}
               open={menu === "status"}
               triggerClassName="property-control property-status"
-              ariaLabel={text("状态", "Status")}
+              ariaLabel={text("狀態", "Status")}
               onOpenChange={(open) => setMenu(open ? "status" : null)}
               onChange={setStatus}
             />
@@ -441,7 +441,7 @@ export function TaskEditor({
               }))}
               open={menu === "priority"}
               triggerClassName={`property-control property-priority priority-${priority}`}
-              ariaLabel={text("优先级", "Priority")}
+              ariaLabel={text("優先順序", "Priority")}
               onOpenChange={(open) => setMenu(open ? "priority" : null)}
               onChange={setPriority}
             />
@@ -456,7 +456,7 @@ export function TaskEditor({
               }))}
               open={menu === "assignee"}
               triggerClassName="property-control property-assignee"
-              ariaLabel={text("负责人", "Assignee")}
+              ariaLabel={text("負責人", "Assignee")}
               onOpenChange={(open) => setMenu(open ? "assignee" : null)}
               onChange={(value) => {
                 const selected = assigneeOptions.find((actor) => actorKey(actor) === value);
@@ -475,16 +475,16 @@ export function TaskEditor({
 
             <label className="property-control property-development" title={developmentScan.workspacePath ?? undefined}>
               <LinearIcon name="branch" />
-              <span className="sr-only">{text("代码分支或 Worktree", "Code branch or worktree")}</span>
+              <span className="sr-only">{text("程式碼分支或 Worktree", "Code branch or worktree")}</span>
               <select
                 value={contextValue(developmentContext)}
                 disabled={developmentScanLoading}
                 onChange={(event) => setDevelopmentContext(event.target.value ? JSON.parse(event.target.value) as DevelopmentContext : null)}
               >
                 <option value="">{developmentScanLoading
-                  ? text("正在扫描 Git…", "Scanning Git…")
+                  ? text("正在掃描 Git…", "Scanning Git…")
                   : text("分支 / Worktree", "Branch / worktree")}</option>
-                <optgroup label={text("代码分支", "Code branches")}>
+                <optgroup label={text("程式碼分支", "Code branches")}>
                   {developmentOptions.filter((context) => context.type === "branch").map((context) => <option value={contextValue(context)} key={contextValue(context)}>{contextLabel(context, text)}</option>)}
                 </optgroup>
                 <optgroup label="Worktree">
@@ -511,28 +511,28 @@ export function TaskEditor({
             )}
 
             <div className="composer-menu-anchor">
-              <button className="property-control property-more" type="button" aria-label={text("更多属性", "More properties")} onClick={() => setMenu(menu === "more" ? null : "more")}><LinearIcon name="more" /></button>
+              <button className="property-control property-more" type="button" aria-label={text("更多屬性", "More properties")} onClick={() => setMenu(menu === "more" ? null : "more")}><LinearIcon name="more" /></button>
               {menu === "more" && (
                 <div className="composer-popover more-popover">
-                  <button type="button" onClick={() => setMenu("due")}><span><LinearIcon name="calendarAdd" /></span><strong>{text("设置截止日期", "Set due date")}</strong><kbd>⇧ D</kbd><b><LinearIcon name="chevronRight" /></b></button>
-                  <button type="button" onClick={() => setMenu("recurrence")}><span><LinearIcon name="recurrence" /></span><strong>{text("设置重复…", "Set recurrence…")}</strong><b><LinearIcon name="chevronRight" /></b></button>
+                  <button type="button" onClick={() => setMenu("due")}><span><LinearIcon name="calendarAdd" /></span><strong>{text("設定截止日期", "Set due date")}</strong><kbd>⇧ D</kbd><b><LinearIcon name="chevronRight" /></b></button>
+                  <button type="button" onClick={() => setMenu("recurrence")}><span><LinearIcon name="recurrence" /></span><strong>{text("設定重複…", "Set recurrence…")}</strong><b><LinearIcon name="chevronRight" /></b></button>
                 </div>
               )}
               {menu === "due" && (
                 <div className="composer-popover due-popover">
-                  <label className="custom-date-row"><span>{text("自定义…", "Custom…")}</span><input type="date" value={dueDate} onChange={(event) => chooseDueDate(event.target.value)} /></label>
+                  <label className="custom-date-row"><span>{text("自訂…", "Custom…")}</span><input type="date" value={dueDate} onChange={(event) => chooseDueDate(event.target.value)} /></label>
                   <button type="button" onClick={() => chooseDueDate(dateFromNow(1))}><strong>{text("明天", "Tomorrow")}</strong><span>{displayDate(dateFromNow(1), locale)}</span></button>
-                  <button type="button" onClick={() => chooseDueDate(endOfWeek())}><strong>{text("本周结束", "End of this week")}</strong><span>{displayDate(endOfWeek(), locale)}</span></button>
-                  <button type="button" onClick={() => chooseDueDate(dateFromNow(7))}><strong>{text("一周后", "In one week")}</strong><span>{displayDate(dateFromNow(7), locale)}</span></button>
+                  <button type="button" onClick={() => chooseDueDate(endOfWeek())}><strong>{text("本週結束", "End of this week")}</strong><span>{displayDate(endOfWeek(), locale)}</span></button>
+                  <button type="button" onClick={() => chooseDueDate(dateFromNow(7))}><strong>{text("一週後", "In one week")}</strong><span>{displayDate(dateFromNow(7), locale)}</span></button>
                   {dueDate && <button className="destructive-menu-row" type="button" onClick={() => { setDueDate(""); setRecurrence(null); setMenu(null); }}>{text("清除截止日期", "Clear due date")}</button>}
                 </div>
               )}
               {menu === "recurrence" && (
                 <div className="composer-popover recurrence-popover">
                   <label><span>{text("最早截止日期", "Initial due date")}</span><input type="date" value={dueDate || dateFromNow(7)} onChange={(event) => setDueDate(event.target.value)} /></label>
-                  <label><span>{text("重复频率", "Repeat frequency")}</span><span className="recurrence-controls"><input type="number" min="1" max="365" value={recurrence?.interval ?? 1} onChange={(event) => setRecurrence({ interval: Number(event.target.value), unit: recurrence?.unit ?? "week" })} /><select value={recurrence?.unit ?? "week"} onChange={(event) => setRecurrence({ interval: recurrence?.interval ?? 1, unit: event.target.value as Recurrence["unit"] })}>{Object.entries(RECURRENCE_UNITS[language]).map(([unit, label]) => <option value={unit} key={unit}>{label}</option>)}</select></span></label>
-                  <button className="recurrence-save" type="button" onClick={() => { if (!dueDate) setDueDate(dateFromNow(7)); if (!recurrence) setRecurrence({ interval: 1, unit: "week" }); setMenu(null); }}>{text("设置重复", "Set recurrence")}</button>
-                  {recurrence && <button className="destructive-menu-row" type="button" onClick={() => { setRecurrence(null); setMenu(null); }}>{text("清除重复", "Clear recurrence")}</button>}
+                  <label><span>{text("重複頻率", "Repeat frequency")}</span><span className="recurrence-controls"><input type="number" min="1" max="365" value={recurrence?.interval ?? 1} onChange={(event) => setRecurrence({ interval: Number(event.target.value), unit: recurrence?.unit ?? "week" })} /><select value={recurrence?.unit ?? "week"} onChange={(event) => setRecurrence({ interval: recurrence?.interval ?? 1, unit: event.target.value as Recurrence["unit"] })}>{Object.entries(RECURRENCE_UNITS[language]).map(([unit, label]) => <option value={unit} key={unit}>{label}</option>)}</select></span></label>
+                  <button className="recurrence-save" type="button" onClick={() => { if (!dueDate) setDueDate(dateFromNow(7)); if (!recurrence) setRecurrence({ interval: 1, unit: "week" }); setMenu(null); }}>{text("設定重複", "Set recurrence")}</button>
+                  {recurrence && <button className="destructive-menu-row" type="button" onClick={() => { setRecurrence(null); setMenu(null); }}>{text("清除重複", "Clear recurrence")}</button>}
                 </div>
               )}
             </div>
@@ -554,7 +554,7 @@ export function TaskEditor({
           <footer className="dialog-footer">
             {!task && (
               <>
-                <button className="composer-attach-icon" type="button" disabled={saving} onClick={() => attachmentInputRef.current?.click()} aria-label={text("上传附件", "Upload attachments")}>
+                <button className="composer-attach-icon" type="button" disabled={saving} onClick={() => attachmentInputRef.current?.click()} aria-label={text("上傳附件", "Upload attachments")}>
                   <LinearIcon name="attachment" />{attachments.length > 0 && <span>{attachments.length}</span>}
                 </button>
                 <input ref={attachmentInputRef} type="file" multiple hidden onChange={(event) => { if (event.currentTarget.files) addAttachments(event.currentTarget.files); event.currentTarget.value = ""; }} />
@@ -562,7 +562,7 @@ export function TaskEditor({
             )}
             {task && <span aria-hidden="true" />}
             <div className="dialog-actions">
-              {task && <span className="dialog-updated">{text(`编辑 ${task.identifier}`, `Editing ${task.identifier}`)}</span>}
+              {task && <span className="dialog-updated">{text(`編輯 ${task.identifier}`, `Editing ${task.identifier}`)}</span>}
               <button
                 className="button primary"
                 type="submit"
@@ -572,10 +572,10 @@ export function TaskEditor({
                 }}
               >
                 {saving
-                  ? text("正在保存…", "Saving…")
+                  ? text("正在儲存…", "Saving…")
                   : task
-                    ? text("保存更改", "Save changes")
-                    : text("创建议题", "Create issue")}
+                    ? text("儲存更改", "Save changes")
+                    : text("建立議題", "Create issue")}
               </button>
             </div>
           </footer>

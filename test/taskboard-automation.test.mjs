@@ -163,7 +163,7 @@ test("the automation host request accepts only whitelisted project automation op
 test("the stable name and generated prompt are project-scoped and encode the claim protocol", () => {
   assert.equal(
     buildTaskboardAutomationName(baseRequest),
-    "Taskboard 自动认领 · ppt-skill",
+    "Taskboard 自動認領 · ppt-skill",
   );
 
   const prompt = buildTaskboardAutomationPrompt(baseRequest);
@@ -173,24 +173,24 @@ test("the stable name and generated prompt are project-scoped and encode the cla
   );
   assert.match(prompt, /\[\$manage-taskboard\]\([^)]*\) e-taskboard /);
   assert.match(prompt, /PPT Skill/);
-  assert.match(prompt, /每 5 分钟检查/);
+  assert.match(prompt, /每 5 分鐘檢查/);
   assert.match(prompt, /ppt-skill/);
   assert.match(prompt, /\/Users\/example\/Documents\/ppt-skill/);
-  assert.match(prompt, /每次仅处理一个 todo/);
+  assert.match(prompt, /每次僅處理一個 todo/);
   assert.match(prompt, /issue get/);
   assert.match(prompt, /comment list/);
   assert.match(prompt, /最新 version/);
   assert.match(prompt, /in_progress/);
-  assert.match(prompt, /版本冲突.*跳过/);
-  assert.match(prompt, /关键改动、验证结果、执行结果和剩余风险/);
+  assert.match(prompt, /版本衝突.*跳過/);
+  assert.match(prompt, /關鍵改動、驗證結果、執行結果和剩餘風險/);
   assert.match(prompt, /in_review/);
-  assert.match(prompt, /已绑定.*branch.*worktree/);
+  assert.match(prompt, /已綁定.*branch.*worktree/);
 });
 
 test("the generated cron spec uses the selected whitelisted local Codex options", () => {
   assert.deepEqual(buildTaskboardAutomationSpec(baseRequest), {
     kind: "cron",
-    name: "Taskboard 自动认领 · ppt-skill",
+    name: "Taskboard 自動認領 · ppt-skill",
     prompt: buildTaskboardAutomationPrompt(baseRequest),
     projectId: "codex-project-123",
     executionEnvironment: "local",
@@ -262,7 +262,7 @@ test("ensure-active updates a matching automation by id with a complete active s
     id: "automation-1",
     status: "ACTIVE",
     kind: "cron",
-    name: "Taskboard 自动认领 · ppt-skill",
+    name: "Taskboard 自動認領 · ppt-skill",
     prompt: "old prompt",
     projectId: "old-project",
     executionEnvironment: "local",

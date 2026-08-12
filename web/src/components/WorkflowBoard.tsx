@@ -277,9 +277,9 @@ function initialNodes(): WorkflowCanvasNode[] {
       position: { x: 0, y: 48 },
       data: {
         ...paletteData("issue-trigger"),
-        title: "议题触发器",
-        description: "状态变为「待办事项」时触发",
-        meta: "任意优先级 · 任意标签",
+        title: "議題觸發器",
+        description: "狀態變為「待辦事項」時觸發",
+        meta: "任意優先順序 · 任意標籤",
       },
     },
     {
@@ -288,9 +288,9 @@ function initialNodes(): WorkflowCanvasNode[] {
       position: { x: 0, y: 184 },
       data: {
         ...paletteData("basic-planning"),
-        title: "拆解议题执行计划",
-        description: "生成步骤、依赖和验收条件",
-        meta: "基础规划 · 当前项目",
+        title: "拆解議題執行計畫",
+        description: "產生步驟、依賴和驗收條件",
+        meta: "基礎規劃 · 目前專案",
       },
     },
     {
@@ -300,9 +300,9 @@ function initialNodes(): WorkflowCanvasNode[] {
       position: planItemPosition(0),
       data: {
         ...paletteData("skill"),
-        title: "调用 Skill",
-        description: "运行一个已安装的 Skill",
-        meta: "尚未选择 Skill",
+        title: "呼叫 Skill",
+        description: "執行一個已安裝的 Skill",
+        meta: "尚未選擇 Skill",
       },
     },
     {
@@ -312,9 +312,9 @@ function initialNodes(): WorkflowCanvasNode[] {
       position: planItemPosition(1),
       data: {
         ...paletteData("mcp"),
-        title: "调用 MCP",
-        description: "连接一个已配置的 MCP Server",
-        meta: "尚未选择 MCP Server",
+        title: "呼叫 MCP",
+        description: "連線一個已設定的 MCP Server",
+        meta: "尚未選擇 MCP Server",
       },
     },
     {
@@ -324,8 +324,8 @@ function initialNodes(): WorkflowCanvasNode[] {
       position: planItemPosition(2),
       data: {
         ...paletteData("nano-banana"),
-        title: "生成预览素材",
-        description: "根据议题内容生成预览图",
+        title: "產生預覽素材",
+        description: "根據議題內容產生預覽圖",
         meta: "Nano Banana · 16:9",
       },
     },
@@ -336,8 +336,8 @@ function initialNodes(): WorkflowCanvasNode[] {
       position: planItemPosition(3),
       data: {
         ...paletteData("cloudflare-deploy"),
-        title: "部署预览版本",
-        description: "构建并发布项目预览",
+        title: "部署預覽版本",
+        description: "建置並發布專案預覽",
         meta: "Cloudflare Pages · Preview",
       },
     },
@@ -347,9 +347,9 @@ function initialNodes(): WorkflowCanvasNode[] {
       position: { x: 0, y: 520 },
       data: {
         ...paletteData("codex-review"),
-        title: "审核交付结果",
-        description: "检查产物、测试与验收条件",
-        meta: "Codex · 自动审核",
+        title: "稽核交付結果",
+        description: "檢查產物、測試與驗收條件",
+        meta: "Codex · 自動稽核",
       },
     },
     {
@@ -358,9 +358,9 @@ function initialNodes(): WorkflowCanvasNode[] {
       position: { x: 0, y: 656 },
       data: {
         ...paletteData("issue-update"),
-        title: "提交审核",
-        description: "追加结果评论并更新状态",
-        meta: "状态 → 审核中",
+        title: "提交稽核",
+        description: "追加結果評論並更新狀態",
+        meta: "狀態 → 稽核中",
       },
     },
   ];
@@ -465,7 +465,7 @@ function mergeLegacyWorkspace(
       continue;
     }
     const importedId = `workflow-imported-${crypto.randomUUID()}`;
-    tabs.push({ id: importedId, name: `${legacyTab.name}（从另一入口导入）` });
+    tabs.push({ id: importedId, name: `${legacyTab.name}（從另一入口匯入）` });
     snapshots.set(importedId, normalizeSnapshot(legacySnapshot));
   }
   return {
@@ -682,7 +682,7 @@ export function WorkflowBoard({
         setPersistenceError("");
       } catch {
         if (cancelled) return;
-        setPersistenceError("流程暂时无法同步到任务面板服务");
+        setPersistenceError("流程暫時無法同步到任務面板服務");
         onWorkflowsChange(initialWorkspace.tabs);
       } finally {
         if (!cancelled) setHydrated(true);
@@ -755,7 +755,7 @@ export function WorkflowBoard({
               // The next edit retries after the service is reachable.
             }
           }
-          setPersistenceError("流程保存失败，请稍后重试");
+          setPersistenceError("流程儲存失敗，請稍後重試");
         }
       });
     }, 180);
@@ -786,7 +786,7 @@ export function WorkflowBoard({
       })
       .catch((error) => {
         if ((error as Error).name !== "AbortError") {
-          setPersistenceError("流程同步失败，请稍后重试");
+          setPersistenceError("流程同步失敗，請稍後重試");
         }
       });
     return () => controller.abort();
@@ -1068,9 +1068,9 @@ export function WorkflowBoard({
       return PALETTE_ITEMS.filter((item) => NESTABLE_TONES.has(item.data.tone));
     }
     if (rootStepIds.length === 0) {
-      return PALETTE_ITEMS.filter((item) => item.group === "触发器");
+      return PALETTE_ITEMS.filter((item) => item.group === "觸發器");
     }
-    return PALETTE_ITEMS.filter((item) => item.group !== "触发器");
+    return PALETTE_ITEMS.filter((item) => item.group !== "觸發器");
   }, [pickerTarget, rootStepIds.length]);
 
   function selectStep(item: PaletteItem) {
@@ -1329,7 +1329,7 @@ export function WorkflowBoard({
                     <input
                       ref={workflowNameInputRef}
                       type="text"
-                      aria-label={text("流程名称", "Workflow name")}
+                      aria-label={text("流程名稱", "Workflow name")}
                       value={workflowNameDraft}
                       onChange={(event) => setWorkflowNameDraft(event.target.value)}
                       onBlur={() => commitWorkflowRename(workflow.id)}
@@ -1360,7 +1360,7 @@ export function WorkflowBoard({
                   onDoubleClick={() => startWorkflowRename(workflow)}
                   onContextMenu={(event) => openWorkflowTabMenu(event, workflow.id)}
                   onKeyDown={(event) => handleWorkflowTabKeyDown(event, workflow.id)}
-                  title={text("双击重命名", "Double-click to rename")}
+                  title={text("雙擊重新命名", "Double-click to rename")}
                 >
                   <LinearIcon name="dashboard" />
                   <span>{workflow.name}</span>
@@ -1370,8 +1370,8 @@ export function WorkflowBoard({
             <button
               className="workflow-tab-add"
               type="button"
-              aria-label={text("新建流程", "Create workflow")}
-              title={text("新建流程", "Create workflow")}
+              aria-label={text("新增流程", "Create workflow")}
+              title={text("新增流程", "Create workflow")}
               onClick={createWorkflow}
             >
               <LinearIcon name="plus" />
@@ -1382,7 +1382,7 @@ export function WorkflowBoard({
               <i aria-hidden="true" />
               {persistenceError
                 ? workflowText(text, persistenceError)
-                : text("已自动保存", "Autosaved")}
+                : text("已自動儲存", "Autosaved")}
             </span>
           </div>
         </div>
@@ -1391,7 +1391,7 @@ export function WorkflowBoard({
           className="workflow-canvas"
           id="workflow-canvas-panel"
           role="tabpanel"
-          aria-label={text("流程编排区", "Workflow canvas")}
+          aria-label={text("流程編排區", "Workflow canvas")}
           aria-labelledby={`workflow-tab-${activeWorkflowId}`}
         >
           <ReactFlow<WorkflowCanvasNode, Edge>
@@ -1442,11 +1442,11 @@ export function WorkflowBoard({
             <button
               className="workflow-empty-add"
               type="button"
-              aria-label={text("添加第一个步骤", "Add the first step")}
+              aria-label={text("新增第一個步驟", "Add the first step")}
               onClick={() => openStepPicker([], 0)}
             >
               <LinearIcon name="plus" />
-              <span>{text("添加触发器", "Add trigger")}</span>
+              <span>{text("新增觸發器", "Add trigger")}</span>
             </button>
           )}
           {pickerTarget && (
@@ -1462,7 +1462,7 @@ export function WorkflowBoard({
       {selectedNode && (
         <aside
           className="workflow-inspector workflow-step-inspector"
-          aria-label={text("步骤配置", "Step configuration")}
+          aria-label={text("步驟設定", "Step configuration")}
         >
           <WorkflowInspector
             node={selectedNode}
@@ -1494,7 +1494,7 @@ export function WorkflowBoard({
               onClick={() => deleteWorkflow(workflowTabMenu.workflowId)}
             >
               <span className="context-menu-icon"><LinearIcon name="trash" /></span>
-              <span className="context-menu-label">{text("删除流程", "Delete workflow")}</span>
+              <span className="context-menu-label">{text("刪除流程", "Delete workflow")}</span>
             </button>
           </div>
         </div>,

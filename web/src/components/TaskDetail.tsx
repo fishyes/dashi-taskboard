@@ -111,13 +111,13 @@ interface TaskDetailProps {
 function messageFor(error: unknown): TaskDetailError {
   if (error instanceof ApiError) return error.message;
   if (error instanceof Error) return error.message;
-  return ["操作未完成，请重试。", "The action could not be completed. Try again."];
+  return ["操作未完成，請重試。", "The action could not be completed. Try again."];
 }
 
 function issueMessageFor(error: unknown): TaskDetailError {
   if (error instanceof ApiError && error.code === "VERSION_CONFLICT") {
     return [
-      "该议题已在其他位置更新，请刷新后重试。",
+      "該議題已在其他位置更新，請重新整理後重試。",
       "This issue changed elsewhere. Refresh and try again.",
     ];
   }
@@ -181,31 +181,31 @@ function contextLabel(
 ): string {
   if (context.type === "branch") return context.branch;
   const folder = context.path.split(/[\\/]/).filter(Boolean).at(-1) ?? context.path;
-  return `${context.branch ?? text("分离 HEAD", "detached")} · ${folder}`;
+  return `${context.branch ?? text("分離 HEAD", "detached")} · ${folder}`;
 }
 
 const ACTIVITY_FIELD_LABELS: Record<string, readonly [string, string]> = {
-  projectId: ["项目", "project"],
-  title: ["标题", "title"],
+  projectId: ["專案", "project"],
+  title: ["標題", "title"],
   description: ["描述", "description"],
-  status: ["状态", "status"],
-  priority: ["优先级", "priority"],
-  labels: ["标签", "labels"],
-  assignee: ["负责人", "assignee"],
+  status: ["狀態", "status"],
+  priority: ["優先順序", "priority"],
+  labels: ["標籤", "labels"],
+  assignee: ["負責人", "assignee"],
   workflowId: ["工作流", "workflow"],
-  developmentContext: ["开发上下文", "development context"],
-  startDate: ["开始日期", "start date"],
+  developmentContext: ["開發上下文", "development context"],
+  startDate: ["開始日期", "start date"],
   dueDate: ["截止日期", "due date"],
-  recurrence: ["重复", "recurrence"],
-  archivedAt: ["归档状态", "archive status"],
-  relation: ["关系", "relation"],
+  recurrence: ["重複", "recurrence"],
+  archivedAt: ["歸檔狀態", "archive status"],
+  relation: ["關係", "relation"],
 };
 
 const RELATION_LABELS: Record<IssueRelationType, readonly [string, string]> = {
-  parent: ["父议题", "Parent issue"],
+  parent: ["父議題", "Parent issue"],
   blocks: ["阻塞", "Blocks"],
-  blocked_by: ["阻塞于", "Blocked by"],
-  related: ["相关议题", "Related issue"],
+  blocked_by: ["阻塞於", "Blocked by"],
+  related: ["相關議題", "Related issue"],
 };
 
 function activityValue(
@@ -217,10 +217,10 @@ function activityValue(
 ): string {
   if (field === "archivedAt") {
     return typeof value === "string"
-      ? text(`已归档（${exactTime(value, locale)}）`, `Archived (${exactTime(value, locale)})`)
-      : text("未归档", "Not archived");
+      ? text(`已歸檔（${exactTime(value, locale)}）`, `Archived (${exactTime(value, locale)})`)
+      : text("未歸檔", "Not archived");
   }
-  if (value === null || value === "") return text("未设置", "Not set");
+  if (value === null || value === "") return text("未設定", "Not set");
   if (field === "status" && typeof value === "string" && value in STATUS_DETAILS) {
     return taskStatusLabel(language, value as TaskStatus);
   }
@@ -230,7 +230,7 @@ function activityValue(
   if (field === "labels" && Array.isArray(value)) {
     return value.length > 0
       ? value.join(language === "zh" ? "、" : ", ")
-      : text("无标签", "No labels");
+      : text("無標籤", "No labels");
   }
   if (field === "assignee" && typeof value === "object") {
     const actor = value as ActorIdentity;
@@ -238,9 +238,9 @@ function activityValue(
   }
   if (field === "developmentContext" && typeof value === "object") {
     const context = value as { type: string; branch?: string | null; path?: string | null };
-    if (context.type === "branch") return context.branch ?? text("未设置", "Not set");
+    if (context.type === "branch") return context.branch ?? text("未設定", "Not set");
     const folder = context.path?.split(/[\\/]/).filter(Boolean).at(-1);
-    return `${context.branch ?? text("分离 HEAD", "detached")}${folder ? ` · ${folder}` : ""}`;
+    return `${context.branch ?? text("分離 HEAD", "detached")}${folder ? ` · ${folder}` : ""}`;
   }
   if (field === "recurrence" && typeof value === "object") {
     const recurrence = value as Recurrence;
@@ -322,11 +322,11 @@ function ConversationLink({
     <button
       className="issue-conversation-link"
       type="button"
-      title={text(`查看对话 ${threadId}`, `View conversation ${threadId}`)}
+      title={text(`檢視對話 ${threadId}`, `View conversation ${threadId}`)}
       onClick={() => onOpen(threadId)}
     >
       <TaskboardIcon name="conversation" />
-      <strong>{text("查看对话", "View conversation")}</strong>
+      <strong>{text("檢視對話", "View conversation")}</strong>
       <span className="conversation-divider" aria-hidden="true" />
       <span className="conversation-thread-id">{threadId}</span>
     </button>
@@ -558,7 +558,7 @@ export function TaskDetail({
     const normalized = title.trim();
     if (!normalized) {
       setTitle(currentTask.title);
-      onError(["议题标题不能为空。", "Issue title cannot be empty."]);
+      onError(["議題標題不能為空。", "Issue title cannot be empty."]);
       return;
     }
     if (normalized === currentTask.title) {
@@ -636,7 +636,7 @@ export function TaskDetail({
       if (commentAttachmentInputRef.current) commentAttachmentInputRef.current.value = "";
       const failed = results.length - uploaded.length;
       if (failed > 0) setCommentsError([
-        `评论已发布，但有 ${failed} 个附件上传失败。`,
+        `評論已送出，但有 ${failed} 個附件上傳失敗。`,
         `The comment was posted, but ${failed} attachments failed to upload.`,
       ]);
       requestAnimationFrame(() => composerRef.current?.focus());
@@ -652,7 +652,7 @@ export function TaskDetail({
     const oversized = selected.find((file) => file.size > MAX_ATTACHMENT_SIZE);
     if (oversized) {
       setCommentsError([
-        `“${oversized.name}” 超过 25 MB，无法上传。`,
+        `“${oversized.name}” 超過 25 MB，無法上傳。`,
         `“${oversized.name}” is larger than 25 MB and cannot be uploaded.`,
       ]);
       if (commentAttachmentInputRef.current) commentAttachmentInputRef.current.value = "";
@@ -737,7 +737,7 @@ export function TaskDetail({
     const oversized = selected.find((file) => file.size > MAX_ATTACHMENT_SIZE);
     if (oversized) {
       setAttachmentsError([
-        `“${oversized.name}” 超过 25 MB，无法上传。`,
+        `“${oversized.name}” 超過 25 MB，無法上傳。`,
         `“${oversized.name}” is larger than 25 MB and cannot be uploaded.`,
       ]);
       if (attachmentInputRef.current) attachmentInputRef.current.value = "";
@@ -823,19 +823,19 @@ export function TaskDetail({
   return (
     <section
       className="issue-detail"
-      aria-label={text(`${task.identifier} 议题详情`, `${task.identifier} issue details`)}
+      aria-label={text(`${task.identifier} 議題詳細資料`, `${task.identifier} issue details`)}
     >
       <div className="issue-detail-scroll">
         <div className="issue-detail-layout">
           <div className="issue-detail-main">
-            <article className="issue-editor" aria-label={text("议题内容", "Issue content")}>
+            <article className="issue-editor" aria-label={text("議題內容", "Issue content")}>
               <div className="issue-editor-content">
                 <textarea
                   ref={titleRef}
                   className="issue-title-input"
                   rows={1}
                   value={title}
-                  aria-label={text("议题标题", "Issue title")}
+                  aria-label={text("議題標題", "Issue title")}
                   disabled={savingProperty === "title"}
                   onChange={(event) => {
                     setTitle(event.target.value.replace(/\n/g, ""));
@@ -866,8 +866,8 @@ export function TaskDetail({
                     <InlineMediaComposer
                       ref={descriptionComposerRef}
                       segments={descriptionSegments}
-                      placeholder={text("添加描述…", "Add description…")}
-                      ariaLabel={text("议题描述", "Issue description")}
+                      placeholder={text("新增描述…", "Add description…")}
+                      ariaLabel={text("議題描述", "Issue description")}
                       disabled={savingProperty === "description"}
                       onChange={setDescriptionSegments}
                       onError={onError}
@@ -885,7 +885,7 @@ export function TaskDetail({
                     className={`issue-description-read${description ? "" : " empty"}`}
                     role="button"
                     tabIndex={0}
-                    aria-label={text("编辑议题描述", "Edit issue description")}
+                    aria-label={text("編輯議題描述", "Edit issue description")}
                     onClick={() => {
                       if (window.getSelection()?.isCollapsed === false) return;
                       setDescriptionSegments(createInlineMediaSegments(description));
@@ -901,13 +901,13 @@ export function TaskDetail({
                   >
                     {description
                       ? <DescriptionDocument value={description} />
-                      : text("添加描述…", "Add description…")}
+                      : text("新增描述…", "Add description…")}
                   </div>
                 )}
                 {currentTask.threadId && (
                   <div
                     className="issue-conversation-list"
-                    aria-label={text("处理此议题的对话", "Conversations for this issue")}
+                    aria-label={text("處理此議題的對話", "Conversations for this issue")}
                   >
                     <ConversationLink threadId={currentTask.threadId} onOpen={onOpenThread} />
                   </div>
@@ -941,8 +941,8 @@ export function TaskDetail({
                 >
                   <LinearIcon name="attachment" />
                   {uploadingAttachments
-                    ? text("上传中…", "Uploading…")
-                    : text("添加附件", "Add attachment")}
+                    ? text("上傳中…", "Uploading…")
+                    : text("新增附件", "Add attachment")}
                 </button>
                 <input
                   ref={attachmentInputRef}
@@ -956,7 +956,7 @@ export function TaskDetail({
               </header>
 
               {attachmentsLoading ? (
-                <div className="attachments-loading" aria-label={text("正在加载附件", "Loading attachments")} aria-busy="true"><i /><i /></div>
+                <div className="attachments-loading" aria-label={text("正在載入附件", "Loading attachments")} aria-busy="true"><i /><i /></div>
               ) : visibleTaskAttachments.length > 0 ? (
                 <ul className="attachment-list">
                   {visibleTaskAttachments.map((attachment) => (
@@ -965,7 +965,7 @@ export function TaskDetail({
                         className="attachment-link"
                         href={attachmentDownloadUrl(attachment)}
                         download={attachment.filename}
-                        title={text(`下载 ${attachment.filename}`, `Download ${attachment.filename}`)}
+                        title={text(`下載 ${attachment.filename}`, `Download ${attachment.filename}`)}
                         onClick={(event) => handleAttachmentDownload(event, attachment)}
                       >
                         <span className="attachment-file-icon" aria-hidden="true">
@@ -980,16 +980,16 @@ export function TaskDetail({
                         <a
                           href={attachmentDownloadUrl(attachment)}
                           download={attachment.filename}
-                          aria-label={text(`下载 ${attachment.filename}`, `Download ${attachment.filename}`)}
-                          title={text("下载附件", "Download attachment")}
+                          aria-label={text(`下載 ${attachment.filename}`, `Download ${attachment.filename}`)}
+                          title={text("下載附件", "Download attachment")}
                           onClick={(event) => handleAttachmentDownload(event, attachment)}
                         >
                           <LinearIcon name="openExternal" />
                         </a>
                         <button
                           type="button"
-                          aria-label={text(`删除 ${attachment.filename}`, `Delete ${attachment.filename}`)}
-                          title={text("删除附件", "Delete attachment")}
+                          aria-label={text(`刪除 ${attachment.filename}`, `Delete ${attachment.filename}`)}
+                          title={text("刪除附件", "Delete attachment")}
                           onClick={() => setPendingAttachmentDelete(attachment)}
                         >
                           <LinearIcon name="trash" />
@@ -1000,7 +1000,7 @@ export function TaskDetail({
                 </ul>
               ) : (
                 <p className="attachments-empty">{text(
-                  "添加图片、文档或其他文件，单个文件不超过 25 MB。",
+                  "新增圖片、文件或其他檔案，單個檔案不超過 25 MB。",
                   "Add images, documents, or other files up to 25 MB each.",
                 )}</p>
               )}
@@ -1015,7 +1015,7 @@ export function TaskDetail({
 
             <section className="activity-section" aria-labelledby="activity-heading">
               <header className="activity-heading">
-                <h2 id="activity-heading">{text("活动", "Activity")}</h2>
+                <h2 id="activity-heading">{text("活動", "Activity")}</h2>
                 <span>{activityTimeline.length}</span>
               </header>
 
@@ -1034,13 +1034,13 @@ export function TaskDetail({
                   </span>
                   <p>
                     <strong>{currentTask.creatorName}</strong>
-                    {text(" 创建了此议题", " created this issue")}
+                    {text(" 建立了此議題", " created this issue")}
                     <time title={exactTime(currentTask.createdAt, locale)}>{relativeTime(currentTask.createdAt, locale)}</time>
                   </p>
                 </div>
 
                 {commentsLoading ? (
-                  <div className="comments-loading" aria-label={text("正在加载活动", "Loading activity")} aria-busy="true"><i /><i /></div>
+                  <div className="comments-loading" aria-label={text("正在載入活動", "Loading activity")} aria-busy="true"><i /><i /></div>
                 ) : activityTimeline.map((item) => {
                   if (item.kind === "change") {
                     const { activity, change } = item;
@@ -1080,14 +1080,14 @@ export function TaskDetail({
                           {change.field === "description" ? (
                             <>{text("更新了描述", "updated the description")}</>
                           ) : change.field === "relation" && change.before === null ? (
-                            <>{text("添加了 ", "added ")}<span className="activity-change-value">{afterValue}</span></>
+                            <>{text("新增了 ", "added ")}<span className="activity-change-value">{afterValue}</span></>
                           ) : change.field === "relation" && change.after === null ? (
                             <>{text("移除了 ", "removed ")}<span className="activity-change-value">{beforeValue}</span></>
                           ) : language === "zh" ? (
                             <>
-                              将{fieldLabel}从
+                              將{fieldLabel}從
                               <span className="activity-change-value">{beforeValue}</span>
-                              改为
+                              改為
                               <span className="activity-change-value">{afterValue}</span>
                             </>
                           ) : (
@@ -1128,11 +1128,11 @@ export function TaskDetail({
                           <span
                             className="comment-edited"
                             title={text(
-                              `编辑于 ${exactTime(comment.updatedAt, locale)}`,
+                              `編輯於 ${exactTime(comment.updatedAt, locale)}`,
                               `Edited ${exactTime(comment.updatedAt, locale)}`,
                             )}
                           >
-                            {text("已编辑", "Edited")}
+                            {text("已編輯", "Edited")}
                           </span>
                         )}
                         {editingId !== comment.id && (
@@ -1140,7 +1140,7 @@ export function TaskDetail({
                             <button
                               type="button"
                               className="comment-menu-trigger"
-                              aria-label={text("评论操作", "Comment actions")}
+                              aria-label={text("評論操作", "Comment actions")}
                               aria-haspopup="menu"
                               aria-expanded={activeMenuId === comment.id}
                               onClick={() => setActiveMenuId((current) => current === comment.id ? null : comment.id)}
@@ -1156,7 +1156,7 @@ export function TaskDetail({
                                   onClick={() => beginEdit(comment)}
                                 >
                                   <LinearIcon name="write" />
-                                  {text("编辑评论", "Edit comment")}
+                                  {text("編輯評論", "Edit comment")}
                                 </button>
                                 <button
                                   type="button"
@@ -1165,7 +1165,7 @@ export function TaskDetail({
                                   onClick={() => { setPendingDelete(comment); setActiveMenuId(null); }}
                                 >
                                   <LinearIcon name="trash" />
-                                  {text("删除评论", "Delete comment")}
+                                  {text("刪除評論", "Delete comment")}
                                 </button>
                               </div>
                             )}
@@ -1179,8 +1179,8 @@ export function TaskDetail({
                             ref={editingComposerRef}
                             className="comment-inline-media"
                             segments={editingSegments}
-                            placeholder={text("编辑评论", "Edit comment")}
-                            ariaLabel={text("编辑评论", "Edit comment")}
+                            placeholder={text("編輯評論", "Edit comment")}
+                            ariaLabel={text("編輯評論", "Edit comment")}
                             disabled={savingCommentId === comment.id}
                             onChange={setEditingSegments}
                             onError={setCommentsError}
@@ -1200,7 +1200,7 @@ export function TaskDetail({
                               onClick={() => editCommentImageInputRef.current?.click()}
                             >
                               <LinearIcon name="attachment" />
-                              {text("添加图片", "Add images")}
+                              {text("新增圖片", "Add images")}
                             </button>
                             <input
                               ref={editCommentImageInputRef}
@@ -1230,8 +1230,8 @@ export function TaskDetail({
                               onClick={() => void saveComment(comment)}
                             >
                               {savingCommentId === comment.id
-                                ? text("保存中…", "Saving…")
-                                : text("保存", "Save")}
+                                ? text("儲存中…", "Saving…")
+                                : text("儲存", "Save")}
                             </button>
                           </div>
                         </div>
@@ -1241,7 +1241,7 @@ export function TaskDetail({
                       {comment.attachments.some(
                         (attachment) => !markdownIncludesAttachment(comment.body, attachment),
                       ) && (
-                        <ul className="comment-attachment-list" aria-label={text("评论附件", "Comment attachments")}>
+                        <ul className="comment-attachment-list" aria-label={text("評論附件", "Comment attachments")}>
                           {comment.attachments
                             .filter((attachment) => !markdownIncludesAttachment(comment.body, attachment))
                             .map((attachment) => (
@@ -1249,7 +1249,7 @@ export function TaskDetail({
                                 <a
                                   href={attachmentDownloadUrl(attachment)}
                                   download={attachment.filename}
-                                  title={text(`下载 ${attachment.filename}`, `Download ${attachment.filename}`)}
+                                  title={text(`下載 ${attachment.filename}`, `Download ${attachment.filename}`)}
                                   onClick={(event) => handleAttachmentDownload(event, attachment)}
                                 >
                                   <span className="attachment-file-icon" aria-hidden="true">
@@ -1260,8 +1260,8 @@ export function TaskDetail({
                                 {editingId !== comment.id && (
                                   <button
                                     type="button"
-                                    aria-label={text(`删除 ${attachment.filename}`, `Delete ${attachment.filename}`)}
-                                    title={text("删除附件", "Delete attachment")}
+                                    aria-label={text(`刪除 ${attachment.filename}`, `Delete ${attachment.filename}`)}
+                                    title={text("刪除附件", "Delete attachment")}
                                     onClick={() => setPendingAttachmentDelete(attachment)}
                                   >
                                     <LinearIcon name="trash" />
@@ -1303,8 +1303,8 @@ export function TaskDetail({
                   ref={composerRef}
                   className="comment-inline-media"
                   segments={commentSegments}
-                  placeholder={text("留下评论…", "Leave a comment…")}
-                  ariaLabel={text("留下评论", "Leave a comment")}
+                  placeholder={text("留下評論…", "Leave a comment…")}
+                  ariaLabel={text("留下評論", "Leave a comment")}
                   onChange={setCommentSegments}
                   onError={setCommentsError}
                   onKeyDown={handleSubmitShortcut}
@@ -1312,8 +1312,8 @@ export function TaskDetail({
                 <PendingAttachments
                   files={pendingCommentFiles}
                   disabled={submitting}
-                  uploadLabel={text("发布后上传", "Upload after posting")}
-                  ariaLabel={text("待上传评论附件", "Pending comment attachments")}
+                  uploadLabel={text("送出後上傳", "Upload after posting")}
+                  ariaLabel={text("待上傳評論附件", "Pending comment attachments")}
                   className="comment-composer-files"
                   onRemove={(index) => setPendingCommentFiles((current) => current.filter((_, itemIndex) => itemIndex !== index))}
                 />
@@ -1323,13 +1323,13 @@ export function TaskDetail({
                       className="comment-attach-button"
                       type="button"
                       disabled={submitting}
-                      aria-label={text("添加评论附件", "Add comment attachments")}
-                      title={text("添加附件", "Add attachments")}
+                      aria-label={text("新增評論附件", "Add comment attachments")}
+                      title={text("新增附件", "Add attachments")}
                       onClick={() => commentAttachmentInputRef.current?.click()}
                     >
                       <LinearIcon name="attachment" />
                     </button>
-                    <span>{text("草稿会自动保存", "Drafts are saved automatically")}</span>
+                    <span>{text("草稿會自動儲存", "Drafts are saved automatically")}</span>
                     <input
                       ref={commentAttachmentInputRef}
                       type="file"
@@ -1351,7 +1351,7 @@ export function TaskDetail({
                         && commentInlineImages.length === 0
                       ) || submitting}
                     >
-                      {submitting ? text("发布中…", "Posting…") : text("评论", "Comment")}
+                      {submitting ? text("送出中…", "Posting…") : text("評論", "Comment")}
                     </button>
                   </div>
                 </footer>
@@ -1359,7 +1359,7 @@ export function TaskDetail({
             </section>
           </div>
 
-          <aside className="issue-properties" aria-label={text("议题属性", "Issue properties")}>
+          <aside className="issue-properties" aria-label={text("議題屬性", "Issue properties")}>
             <div className="detail-primary-actions">
               <button
                 className="detail-open-thread-action"
@@ -1369,23 +1369,23 @@ export function TaskDetail({
               >
                 <ActorAvatar actor={CODEX_AGENT_ACTOR} className="detail-thread-avatar" />
                 <span>{openingThread
-                  ? text("正在打开…", "Opening…")
-                  : text("在对话中打开", "Open in conversation")}</span>
+                  ? text("正在開啟…", "Opening…")
+                  : text("在對話中開啟", "Open in conversation")}</span>
               </button>
               <button
                 className="detail-copy-action"
                 type="button"
                 title={text(
-                  `复制议题 ID ${currentTask.identifier}`,
+                  `複製議題 ID ${currentTask.identifier}`,
                   `Copy issue ID ${currentTask.identifier}`,
                 )}
                 onClick={() => onCopy(
                   currentTask.identifier,
-                  text(`${currentTask.identifier} 已复制。`, `${currentTask.identifier} copied.`),
+                  text(`${currentTask.identifier} 已複製。`, `${currentTask.identifier} copied.`),
                 )}
               >
                 <span className="detail-copy-action-icon" aria-hidden="true"><img src={copyIdIcon} alt="" /></span>
-                <span className="detail-copy-action-label">{text("复制 ID", "Copy ID")}</span>
+                <span className="detail-copy-action-label">{text("複製 ID", "Copy ID")}</span>
                 <span className="detail-copy-identifier">{currentTask.identifier}</span>
               </button>
               <button
@@ -1397,16 +1397,16 @@ export function TaskDetail({
                     currentTask.projectId,
                     currentTask.identifier,
                   ).href,
-                  text("议题链接已复制。", "Issue link copied."),
+                  text("議題連結已複製。", "Issue link copied."),
                 )}
               >
                 <span className="detail-copy-action-icon" aria-hidden="true"><img src={copyLinkIcon} alt="" /></span>
-                <span className="detail-copy-action-label">{text("复制链接", "Copy link")}</span>
+                <span className="detail-copy-action-label">{text("複製連結", "Copy link")}</span>
               </button>
             </div>
-            <h2>{text("属性", "Properties")}</h2>
+            <h2>{text("屬性", "Properties")}</h2>
             <div className="detail-property-row">
-              <span className="detail-property-label">{text("状态", "Status")}</span>
+              <span className="detail-property-label">{text("狀態", "Status")}</span>
               <TaskPropertyPicker
                 value={currentTask.status}
                 options={TASK_STATUSES.map((status) => ({
@@ -1419,13 +1419,13 @@ export function TaskDetail({
                 disabled={savingProperty === "status"}
                 className="detail-property-picker"
                 triggerClassName="detail-property-trigger"
-                ariaLabel={text("状态", "Status")}
+                ariaLabel={text("狀態", "Status")}
                 onOpenChange={(open) => setPropertyMenu(open ? "status" : null)}
                 onChange={(status) => void saveTask({ status }, "status")}
               />
             </div>
             <div className="detail-property-row">
-              <span className="detail-property-label">{text("优先级", "Priority")}</span>
+              <span className="detail-property-label">{text("優先順序", "Priority")}</span>
               <TaskPropertyPicker
                 value={currentTask.priority}
                 options={TASK_PRIORITIES.map((priority) => ({
@@ -1438,13 +1438,13 @@ export function TaskDetail({
                 disabled={savingProperty === "priority"}
                 className="detail-property-picker"
                 triggerClassName="detail-property-trigger"
-                ariaLabel={text("优先级", "Priority")}
+                ariaLabel={text("優先順序", "Priority")}
                 onOpenChange={(open) => setPropertyMenu(open ? "priority" : null)}
                 onChange={(priority) => void saveTask({ priority }, "priority")}
               />
             </div>
             <div className="detail-property-row assignee-property">
-              <span className="detail-property-label">{text("负责人", "Assignee")}</span>
+              <span className="detail-property-label">{text("負責人", "Assignee")}</span>
               <TaskPropertyPicker
                 value={actorKey(currentTask.assignee)}
                 options={assigneeOptions.map((actor) => ({
@@ -1458,7 +1458,7 @@ export function TaskDetail({
                 disabled={savingProperty === "assignee"}
                 className="detail-property-picker"
                 triggerClassName="detail-property-trigger"
-                ariaLabel={text("负责人", "Assignee")}
+                ariaLabel={text("負責人", "Assignee")}
                 onOpenChange={(open) => setPropertyMenu(open ? "assignee" : null)}
                 onChange={(value) => {
                   const selected = assigneeOptions.find((actor) => actorKey(actor) === value);
@@ -1473,7 +1473,7 @@ export function TaskDetail({
               <span className="detail-property-icon" aria-hidden="true">
                 <LinearIcon name="label" />
               </span>
-              <span className="detail-property-label">{text("标签", "Labels")}</span>
+              <span className="detail-property-label">{text("標籤", "Labels")}</span>
               <LabelPicker
                 availableLabels={availableLabels}
                 selectedLabels={currentTask.labels}
@@ -1482,7 +1482,7 @@ export function TaskDetail({
                 className="detail-label-picker"
                 triggerClassName="detail-label-trigger"
                 showSelectedAsChips
-                placeholder={text("添加标签…", "Add labels…")}
+                placeholder={text("新增標籤…", "Add labels…")}
                 onOpenChange={(open) => setPropertyMenu(open ? "labels" : null)}
                 onChange={(nextLabels) => void saveTask({ labels: nextLabels }, "labels")}
               />
@@ -1491,7 +1491,7 @@ export function TaskDetail({
               <span className="detail-property-icon" aria-hidden="true">
                 <LinearIcon name="branch" />
               </span>
-              <span className="detail-property-label">{text("开发上下文", "Development context")}</span>
+              <span className="detail-property-label">{text("開發上下文", "Development context")}</span>
               <select
                 value={contextValue(currentTask.developmentContext)}
                 disabled={developmentScanLoading || savingProperty === "developmentContext"}
@@ -1501,9 +1501,9 @@ export function TaskDetail({
                 }, "developmentContext")}
               >
                 <option value="">{developmentScanLoading
-                  ? text("正在扫描 Git…", "Scanning Git…")
-                  : text("未绑定", "Not linked")}</option>
-                <optgroup label={text("代码分支", "Code branches")}>
+                  ? text("正在掃描 Git…", "Scanning Git…")
+                  : text("未綁定", "Not linked")}</option>
+                <optgroup label={text("程式碼分支", "Code branches")}>
                   {developmentOptions.filter((context) => context.type === "branch").map((context) => (
                     <option value={contextValue(context)} key={contextValue(context)}>{contextLabel(context, text)}</option>
                   ))}
@@ -1517,7 +1517,7 @@ export function TaskDetail({
             </label>
             <label className="detail-property-row">
               <span className="detail-property-icon" aria-hidden="true"><LinearIcon name="calendar" /></span>
-              <span className="detail-property-label">{text("开始日期", "Start date")}</span>
+              <span className="detail-property-label">{text("開始日期", "Start date")}</span>
               <input
                 type="date"
                 value={currentTask.startDate ?? ""}
@@ -1542,7 +1542,7 @@ export function TaskDetail({
             </label>
             <label className="detail-property-row">
               <span className="detail-property-icon" aria-hidden="true"><LinearIcon name="recurrence" /></span>
-              <span className="detail-property-label">{text("重复", "Recurrence")}</span>
+              <span className="detail-property-label">{text("重複", "Recurrence")}</span>
               <select
                 value={currentTask.recurrence?.unit ?? ""}
                 disabled={!currentTask.dueDate || savingProperty === "recurrence"}
@@ -1552,9 +1552,9 @@ export function TaskDetail({
                     : null,
                 }, "recurrence")}
               >
-                <option value="">{text("不重复", "Does not repeat")}</option>
+                <option value="">{text("不重複", "Does not repeat")}</option>
                 <option value="day">{text("每天", "Daily")}</option>
-                <option value="week">{text("每周", "Weekly")}</option>
+                <option value="week">{text("每週", "Weekly")}</option>
                 <option value="month">{text("每月", "Monthly")}</option>
                 <option value="year">{text("每年", "Yearly")}</option>
               </select>
@@ -1572,11 +1572,11 @@ export function TaskDetail({
             />
             <div className="detail-timestamps">
               <span>{text(
-                `创建于 ${exactTime(currentTask.createdAt, locale)}`,
+                `建立於 ${exactTime(currentTask.createdAt, locale)}`,
                 `Created ${exactTime(currentTask.createdAt, locale)}`,
               )}</span>
               {currentTask.updatedAt !== currentTask.createdAt && <span>{text(
-                `更新于 ${exactTime(currentTask.updatedAt, locale)}`,
+                `更新於 ${exactTime(currentTask.updatedAt, locale)}`,
                 `Updated ${exactTime(currentTask.updatedAt, locale)}`,
               )}</span>}
             </div>
@@ -1589,11 +1589,11 @@ export function TaskDetail({
           if (event.target === event.currentTarget && !deleting) setPendingDelete(null);
         }}>
           <div className="delete-dialog" role="alertdialog" aria-modal="true" aria-labelledby="delete-comment-title">
-            <h2 id="delete-comment-title">{text("删除这条评论？", "Delete this comment?")}</h2>
-            <p>{text("此操作无法撤销。", "This action cannot be undone.")}</p>
+            <h2 id="delete-comment-title">{text("刪除這條評論？", "Delete this comment?")}</h2>
+            <p>{text("此操作無法撤銷。", "This action cannot be undone.")}</p>
             <div>
               <button className="button secondary" type="button" disabled={deleting} onClick={() => setPendingDelete(null)}>{text("取消", "Cancel")}</button>
-              <button className="button danger" type="button" disabled={deleting} onClick={() => void confirmDelete()}>{deleting ? text("删除中…", "Deleting…") : text("删除评论", "Delete comment")}</button>
+              <button className="button danger" type="button" disabled={deleting} onClick={() => void confirmDelete()}>{deleting ? text("刪除中…", "Deleting…") : text("刪除評論", "Delete comment")}</button>
             </div>
           </div>
         </div>
@@ -1604,14 +1604,14 @@ export function TaskDetail({
           if (event.target === event.currentTarget && !deletingAttachment) setPendingAttachmentDelete(null);
         }}>
           <div className="delete-dialog" role="alertdialog" aria-modal="true" aria-labelledby="delete-attachment-title">
-            <h2 id="delete-attachment-title">{text("删除这个附件？", "Delete this attachment?")}</h2>
+            <h2 id="delete-attachment-title">{text("刪除這個附件？", "Delete this attachment?")}</h2>
             <p>{text(
-              `“${pendingAttachmentDelete.filename}” 将被永久删除，此操作无法撤销。`,
+              `“${pendingAttachmentDelete.filename}” 將被永久刪除，此操作無法撤銷。`,
               `“${pendingAttachmentDelete.filename}” will be permanently deleted. This action cannot be undone.`,
             )}</p>
             <div>
               <button className="button secondary" type="button" disabled={deletingAttachment} onClick={() => setPendingAttachmentDelete(null)}>{text("取消", "Cancel")}</button>
-              <button className="button danger" type="button" disabled={deletingAttachment} onClick={() => void confirmAttachmentDelete()}>{deletingAttachment ? text("删除中…", "Deleting…") : text("删除附件", "Delete attachment")}</button>
+              <button className="button danger" type="button" disabled={deletingAttachment} onClick={() => void confirmAttachmentDelete()}>{deletingAttachment ? text("刪除中…", "Deleting…") : text("刪除附件", "Delete attachment")}</button>
             </div>
           </div>
         </div>

@@ -510,7 +510,7 @@ function actorFromRequest(request) {
   const rawName = requestHeader(request, "x-taskboard-user-name");
   const rawAvatarUrl = requestHeader(request, "x-taskboard-user-avatar");
   if (rawId === undefined && rawName === undefined && rawAvatarUrl === undefined) {
-    return { type: "user", id: "local-user", name: "本地用户", avatarUrl: null };
+    return { type: "user", id: "local-user", name: "本機使用者", avatarUrl: null };
   }
   if (rawId === undefined || rawName === undefined) {
     throw new ApiError(400, "INVALID_ACTOR", "User identity requires both an ID and name");

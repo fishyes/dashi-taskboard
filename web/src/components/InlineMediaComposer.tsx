@@ -253,7 +253,7 @@ function PersistedImageBlock({
       <button
         type="button"
         disabled={disabled}
-        aria-label={text(`移除 ${segment.alt || "图片"}`, `Remove ${segment.alt || "image"}`)}
+        aria-label={text(`移除 ${segment.alt || "圖片"}`, `Remove ${segment.alt || "image"}`)}
         onClick={onRemove}
       >
         <LinearIcon name="close" />
@@ -300,7 +300,7 @@ export const InlineMediaComposer = forwardRef<InlineMediaComposerHandle, InlineM
         const oversized = selected.find((file) => file.size > MAX_ATTACHMENT_SIZE);
         if (oversized) {
           onError([
-            `“${oversized.name}” 超过 25 MB，无法上传。`,
+            `“${oversized.name}” 超過 25 MB，無法上傳。`,
             `“${oversized.name}” is larger than 25 MB and cannot be uploaded.`,
           ]);
           return;
@@ -336,7 +336,7 @@ export const InlineMediaComposer = forwardRef<InlineMediaComposerHandle, InlineM
       const oversized = clipboardFiles.find((file) => file.size > MAX_ATTACHMENT_SIZE);
       if (oversized) {
         onError([
-          `“${oversized.name}” 超过 25 MB，无法上传。`,
+          `“${oversized.name}” 超過 25 MB，無法上傳。`,
           `“${oversized.name}” is larger than 25 MB and cannot be uploaded.`,
         ]);
         return;
@@ -386,7 +386,7 @@ export const InlineMediaComposer = forwardRef<InlineMediaComposerHandle, InlineM
               value={segment.text}
               rows={1}
               disabled={disabled}
-              aria-label={index === 0 ? ariaLabel : text(`${ariaLabel}续写`, `${ariaLabel} continuation`)}
+              aria-label={index === 0 ? ariaLabel : text(`${ariaLabel}續寫`, `${ariaLabel} continuation`)}
               placeholder={isEmpty && index === 0 ? placeholder : undefined}
               onChange={(event) => {
                 changeText(segment.id, event.target.value);
