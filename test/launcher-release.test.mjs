@@ -4,17 +4,21 @@ import { test } from "node:test";
 
 const launcherSource = await readFile(new URL("../src-tauri/src/main.rs", import.meta.url), "utf8");
 const tauriConfig = JSON.parse(await readFile(new URL("../src-tauri/tauri.conf.json", import.meta.url), "utf8"));
+const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
 const releaseWorkflow = await readFile(new URL("../.github/workflows/release-macos.yml", import.meta.url), "utf8");
 const checkWorkflow = await readFile(new URL("../.github/workflows/check.yml", import.meta.url), "utf8");
 
-test("the macOS launcher uses one instance, serialized lifecycle changes, and a private CDP pipe", () => {
+test("the macOS launcher uses one instance, serialized lifecycle changes, and a loopback CDP port", () => {
   assert.match(launcherSource, /libc::flock/);
   assert.match(launcherSource, /lifecycle: Mutex/);
   assert.match(launcherSource, /generation: AtomicU64/);
   assert.match(launcherSource, /TcpListener::bind\(\("127\.0\.0\.1", 0\)\)/);
   assert.equal(launcherSource.match(/TcpListener::bind/g)?.length, 1);
-  assert.match(launcherSource, /"--cdp-pipe"/);
-  assert.doesNotMatch(launcherSource, /cdp_port/);
+  assert.match(launcherSource, /codex_port: Mutex<Option<u16>>/);
+  assert.match(
+    launcherSource,
+    /#\[cfg\(target_os = "macos"\)\]\s+command\.args\(\["--launch", "--watch", "--open", "--port", &codex_port\]\);/,
+  );
   assert.doesNotMatch(launcherSource, /const LAUNCHER_PORT/);
 });
 
@@ -35,4 +39,11 @@ test("release signing is tag-only and PR CI builds the real unsigned app bundle"
 
 test("the launcher minimum system version matches the current Codex client requirement", () => {
   assert.equal(tauriConfig.bundle.macOS.minimumSystemVersion, "14.0");
+});
+
+test("desktop build scripts pass the preparation target directly on every platform", () => {
+  assert.match(packageJson.scripts["app:build"], /prepare-tauri-app\.mjs --target universal-apple-darwin/);
+  assert.match(packageJson.scripts["app:build:windows"], /prepare-tauri-app\.mjs --target x86_64-pc-windows-msvc/);
+  assert.doesNotMatch(packageJson.scripts["app:build"], /app:prepare --/);
+  assert.doesNotMatch(packageJson.scripts["app:build:windows"], /app:prepare --/);
 });

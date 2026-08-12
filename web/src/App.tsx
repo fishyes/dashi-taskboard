@@ -22,12 +22,16 @@ import {
   ApiError,
   addTaskRelation,
   archiveTask as archiveTaskRequest,
+  createProjectLabel as createProjectLabelRequest,
   createProject as createProjectRequest,
   createTask as createTaskRequest,
+  configureJiraConnection,
   deleteArchivedTask as deleteArchivedTaskRequest,
+  deleteProjectLabel as deleteProjectLabelRequest,
   deleteProject as deleteProjectRequest,
   getCodexThreadProgress,
   getHostRuntime,
+  getJiraConnection,
   getTaskboardRevision,
   getWorkflowWorkspace,
   getTaskboardMetadata,
@@ -43,6 +47,7 @@ import {
   restoreTask as restoreTaskRequest,
   setApiText,
   setCurrentUserActor,
+  syncJiraConnection,
   uploadAttachment,
   updateTask as updateTaskRequest,
 } from "./api";
@@ -55,6 +60,7 @@ import { BoardColumn } from "./components/BoardColumn";
 import { AiChat, type AiChatOpenThreadRequest } from "./components/AiChat";
 import { DashboardView } from "./components/DashboardView";
 import { IssueListView } from "./components/IssueListView";
+import { JiraConnectionDialog } from "./components/JiraConnectionDialog";
 import { OtherTasksPanel } from "./components/OtherTasksPanel";
 import {
   resolveInlineMediaMarkdown,
@@ -84,7 +90,6 @@ import {
   MAIN_STATUSES,
   type OtherTaskTab,
 } from "./issueBoardStatuses";
-import { DEFAULT_LABELS } from "./labels";
 import {
   normalizeCodexThreadId,
   taskCardPresentation,
@@ -106,6 +111,7 @@ import {
   type DevelopmentScan,
   type HostContext,
   type IssueRelationType,
+  type JiraConnection,
   type Project,
   type Task,
   type TaskboardMetadata,
@@ -130,6 +136,18 @@ type DetailSourceScroll =
   | { projectId: string; view: "list"; scrollTop: number };
 type GanttZoom = "day" | "week" | "month";
 type ActionError = string | readonly [string, string];
+type ProjectLoadError = {
+  source: "projects";
+  operation: "initial" | "refresh";
+  requestId: number;
+  message: string;
+};
+type TasksLoadError = {
+  source: "tasks";
+  requestId: number;
+  message: string;
+};
+type LoadError = ProjectLoadError | TasksLoadError;
 const SHOW_WORKFLOW_BOARD_ENTRY = false;
 const GANTT_ZOOM_OPTIONS: GanttZoom[] = ["day", "week", "month"];
 
@@ -317,6 +335,7 @@ const EVENT_NAMES = [
   "attachment.created",
   "attachment.deleted",
   "project.created",
+  "project.labels.updated",
   "workflow.updated",
 ] as const;
 
@@ -521,16 +540,25 @@ function LocalRealtimeSync({
 
     const handleEvent = (event: Event) => {
       const message = event as MessageEvent<string>;
-      let payload: { projectId?: string; taskId?: string } = {};
+      let payload: { projectId?: string; taskId?: string; project?: Project } = {};
       try {
-        payload = JSON.parse(message.data) as { projectId?: string; taskId?: string };
+        payload = JSON.parse(message.data) as {
+          projectId?: string;
+          taskId?: string;
+          project?: Project;
+        };
       } catch {
         // A malformed event should not interrupt later updates.
       }
+      const eventProjectId = payload.projectId ?? payload.project?.id;
       const affectsSelectedProject = Boolean(selectedProjectId)
-        && (!payload.projectId || payload.projectId === selectedProjectId);
+        && (!eventProjectId || eventProjectId === selectedProjectId);
       if (event.type === "project.created") {
         scheduleRefresh({ projects: true });
+        return;
+      }
+      if (event.type === "project.labels.updated") {
+        scheduleRefresh({ projects: true, tasks: affectsSelectedProject });
         return;
       }
       if (event.type.startsWith("task.")) {
@@ -624,7 +652,9 @@ export function App() {
   const [archivedTasks, setArchivedTasks] = useState<Task[]>([]);
   const [tasksLoading, setTasksLoading] = useState(false);
   const [hasLoadedTasks, setHasLoadedTasks] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [projectLoadError, setProjectLoadError] = useState<ProjectLoadError | null>(null);
+  const [tasksLoadError, setTasksLoadError] = useState<TasksLoadError | null>(null);
+  const loadError: LoadError | null = projectLoadError ?? tasksLoadError;
   const [actionError, setActionError] = useState<ActionError | null>(null);
   const actionErrorText = actionError === null
     ? null
@@ -670,6 +700,11 @@ export function App() {
   const [projectContextMenu, setProjectContextMenu] = useState<ProjectContextMenuState | null>(null);
   const [projectCreateOpen, setProjectCreateOpen] = useState(false);
   const [projectName, setProjectName] = useState("");
+  const [jiraDialogOpen, setJiraDialogOpen] = useState(false);
+  const [jiraConnection, setJiraConnection] = useState<JiraConnection | null>(null);
+  const [jiraSaving, setJiraSaving] = useState(false);
+  const [jiraSyncing, setJiraSyncing] = useState(false);
+  const [jiraError, setJiraError] = useState<string | null>(null);
   const [pendingProjectDelete, setPendingProjectDelete] = useState<ProjectChoice | null>(null);
   const [projectDeleteIssueCount, setProjectDeleteIssueCount] = useState<number | null>(null);
   const [deletingProjectId, setDeletingProjectId] = useState<string | null>(null);
@@ -679,6 +714,7 @@ export function App() {
   const [automationError, setAutomationError] = useState<string | null>(null);
   const [announcement, setAnnouncementValue] = useState("");
   const [undoNotice, setUndoNotice] = useState<UndoNotice | null>(null);
+  const projectsRequestRef = useRef(0);
   const tasksRequestRef = useRef(0);
   const tasksRef = useRef<Task[]>([]);
   const undoSequenceRef = useRef(0);
@@ -747,6 +783,7 @@ export function App() {
   }, []);
 
   const selectedProject = projects.find((project) => project.id === selectedProjectId) ?? null;
+  const isJiraProject = selectedProject?.source === "jira";
   useLayoutEffect(() => {
     if (selectedProject) rememberProjectOpen(selectedProject.id);
   }, [rememberProjectOpen, selectedProject]);
@@ -828,13 +865,7 @@ export function App() {
   const contextMenuTask = contextMenu
     ? tasks.find((task) => task.id === contextMenu.taskId) ?? null
     : null;
-  const availableLabels = useMemo(
-    () => [...new Set([
-      ...DEFAULT_LABELS.map((label) => label.name),
-      ...tasks.flatMap((task) => task.labels),
-    ])],
-    [tasks],
-  );
+  const availableLabels = selectedProject?.labels ?? [];
   const projectChoices = useMemo<ProjectChoice[]>(() => {
     const persistedById = new Map(projects.map((project) => [project.id, project]));
     const seen = new Set<string>();
@@ -1432,13 +1463,19 @@ export function App() {
   }, [detailTaskId, embedded, embeddedFrameChallenge, selectedProjectId]);
 
   const loadProjectList = useCallback(async (signal?: AbortSignal) => {
-    setLoadError(null);
+    const requestId = ++projectsRequestRef.current;
+    setProjectLoadError((current) => (
+      current?.operation === "initial" ? { ...current, requestId } : current
+    ));
     try {
       const [nextProjects, metadata, workspaces] = await Promise.all([
         listProjects(signal),
         getTaskboardMetadata(signal),
         listDeviceWorkspaces(signal),
       ]);
+      if (requestId !== projectsRequestRef.current) return;
+      const nextJiraConnection = await getJiraConnection(signal);
+      if (requestId !== projectsRequestRef.current) return;
       setTaskboardMetadata((current) => (
         current
         && current.mode === metadata.mode
@@ -1459,6 +1496,7 @@ export function App() {
         return next;
       });
       setProjects(nextProjects);
+      setJiraConnection(nextJiraConnection);
       setSelectedProjectId((current) => {
         const fromQuery = new URLSearchParams(window.location.search).get("project");
         if (fromQuery && nextProjects.some((project) => project.id === fromQuery)) return fromQuery;
@@ -1467,8 +1505,18 @@ export function App() {
           ?? nextProjects[0]?.id
           ?? GLOBAL_PROJECT_ID;
       });
+      setProjectLoadError((current) => (
+        current?.operation === "initial" && current.requestId === requestId ? null : current
+      ));
     } catch (error) {
-      if ((error as Error).name !== "AbortError") setLoadError(errorMessage(error));
+      if ((error as Error).name !== "AbortError" && requestId === projectsRequestRef.current) {
+        setProjectLoadError({
+          source: "projects",
+          operation: "initial",
+          requestId,
+          message: errorMessage(error),
+        });
+      }
     }
   }, []);
 
@@ -1479,10 +1527,26 @@ export function App() {
   }, [loadProjectList]);
 
   const refreshProjectList = useCallback(async () => {
+    const requestId = ++projectsRequestRef.current;
+    setProjectLoadError((current) => (
+      current?.operation === "refresh" ? { ...current, requestId } : current
+    ));
     try {
-      setProjects(await listProjects());
+      const nextProjects = await listProjects();
+      if (requestId !== projectsRequestRef.current) return;
+      setProjects(nextProjects);
+      setProjectLoadError((current) => (
+        current?.operation === "refresh" && current.requestId === requestId ? null : current
+      ));
     } catch (error) {
-      setLoadError(errorMessage(error));
+      if (requestId === projectsRequestRef.current) {
+        setProjectLoadError({
+          source: "projects",
+          operation: "refresh",
+          requestId,
+          message: errorMessage(error),
+        });
+      }
     }
   }, []);
 
@@ -1492,7 +1556,9 @@ export function App() {
   ) => {
     const requestId = ++tasksRequestRef.current;
     if (!options.quiet) setTasksLoading(true);
-    setLoadError(null);
+    setTasksLoadError((current) => (
+      current ? { ...current, requestId } : current
+    ));
     try {
       const [nextTasks, nextArchivedTasks] = await Promise.all([
         listTasks(projectId, options.signal),
@@ -1501,10 +1567,20 @@ export function App() {
       if (requestId !== tasksRequestRef.current) return;
       setTasks(sortTasks(nextTasks));
       setArchivedTasks(sortTasks(nextArchivedTasks));
+      setProjects((current) => current.map((project) => {
+        if (project.id !== projectId || project.source !== "jira") return project;
+        const labels = [...new Set(nextTasks.flatMap((task) => task.labels))];
+        return JSON.stringify(labels) === JSON.stringify(project.labels)
+          ? project
+          : { ...project, labels };
+      }));
       setHasLoadedTasks(true);
+      setTasksLoadError((current) => (
+        current?.requestId === requestId ? null : current
+      ));
     } catch (error) {
       if ((error as Error).name !== "AbortError" && requestId === tasksRequestRef.current) {
-        setLoadError(errorMessage(error));
+        setTasksLoadError({ source: "tasks", requestId, message: errorMessage(error) });
       }
     } finally {
       if (!options.quiet && requestId === tasksRequestRef.current) setTasksLoading(false);
@@ -1523,6 +1599,14 @@ export function App() {
     void refreshTasks(selectedProjectId, { signal: controller.signal });
     return () => controller.abort();
   }, [refreshTasks, selectedProjectId]);
+
+  useEffect(() => {
+    if (!isJiraProject || !selectedProjectId) return;
+    const timer = window.setInterval(() => {
+      void refreshTasks(selectedProjectId, { quiet: true });
+    }, 60_000);
+    return () => window.clearInterval(timer);
+  }, [isJiraProject, refreshTasks, selectedProjectId]);
 
   const refreshWorkflowOptions = useCallback(async (projectId: string, signal?: AbortSignal) => {
     const record = await getWorkflowWorkspace<unknown>(projectId, signal);
@@ -1688,6 +1772,7 @@ export function App() {
         && !event.metaKey
         && !event.ctrlKey
         && selectedProjectId
+        && !isJiraProject
         && boardView !== "workflow"
       ) {
         event.preventDefault();
@@ -1709,7 +1794,7 @@ export function App() {
 
     window.addEventListener("keydown", handleShortcut);
     return () => window.removeEventListener("keydown", handleShortcut);
-  }, [boardView, contextMenu, detailTaskId, editor, projectMenuOpen, selectedProjectId]);
+  }, [boardView, contextMenu, detailTaskId, editor, isJiraProject, projectMenuOpen, selectedProjectId]);
 
   const filteredTasks = useMemo(() => {
     return tasks.filter(
@@ -1884,8 +1969,9 @@ export function App() {
         const previous = editor.task;
         const previousAssigneeTarget = assigneeTargetForActor(previous.assignee, currentUser);
         if (!draft.assigneeTarget || previousAssigneeTarget) {
+          const displayIdentifier = saved.externalKey ?? saved.identifier;
           pushUndo(
-            text(`${saved.identifier} 已更新。`, `${saved.identifier} was updated.`),
+            text(`${displayIdentifier} 已更新。`, `${displayIdentifier} was updated.`),
             () => restoreTaskDetails(previous, saved, previousAssigneeTarget),
           );
         }
@@ -1953,11 +2039,12 @@ export function App() {
       setTasks((current) => sortTasks(current.map((candidate) =>
         candidate.id === moved.id ? moved : candidate,
       )));
+      const displayIdentifier = task.externalKey ?? task.identifier;
       const message = task.status === status
-        ? text(`${task.identifier} 排序已調整。`, `${task.identifier} was reordered.`)
+        ? text(`${displayIdentifier} 排序已調整。`, `${displayIdentifier} was reordered.`)
         : text(
-          `${task.identifier} 已移至${taskStatusLabel(language, status)}。`,
-          `${task.identifier} was moved to ${taskStatusLabel(language, status)}.`,
+          `${displayIdentifier} 已移至${taskStatusLabel(language, status)}。`,
+          `${displayIdentifier} was moved to ${taskStatusLabel(language, status)}.`,
         );
       pushUndo(message, async () => {
         const candidate = tasksRef.current.find((current) => current.id === moved.id);
@@ -2033,8 +2120,9 @@ export function App() {
       )));
       const previousAssigneeTarget = assigneeTargetForActor(previous.assignee, currentUser);
       if (!assigneeTarget || previousAssigneeTarget) {
+        const displayIdentifier = task.externalKey ?? task.identifier;
         pushUndo(
-          text(`${task.identifier} 已更新。`, `${task.identifier} was updated.`),
+          text(`${displayIdentifier} 已更新。`, `${displayIdentifier} was updated.`),
           () => restoreTaskDetails(previous, updated, previousAssigneeTarget),
         );
       }
@@ -2050,6 +2138,33 @@ export function App() {
         )
         : errorMessage(error));
       if (selectedProjectId) void refreshTasks(selectedProjectId, { quiet: true });
+      throw error;
+    }
+  }
+
+  async function persistProjectLabel(label: string) {
+    setActionError(null);
+    try {
+      const project = await createProjectLabelRequest(selectedProjectId, label);
+      setProjects((current) => current.map((candidate) => (
+        candidate.id === project.id ? project : candidate
+      )));
+    } catch (error) {
+      setActionError(errorMessage(error));
+      throw error;
+    }
+  }
+
+  async function removeProjectLabel(label: string) {
+    setActionError(null);
+    try {
+      const project = await deleteProjectLabelRequest(selectedProjectId, label);
+      setProjects((current) => current.map((candidate) => (
+        candidate.id === project.id ? project : candidate
+      )));
+      await refreshTasks(selectedProjectId, { quiet: true });
+    } catch (error) {
+      setActionError(errorMessage(error));
       throw error;
     }
   }
@@ -2306,6 +2421,60 @@ export function App() {
     }
   }
 
+  function openJiraDialog() {
+    setProjectMenuOpen(false);
+    setProjectContextMenu(null);
+    setJiraError(null);
+    setJiraDialogOpen(true);
+  }
+
+  async function saveJiraConnection(input: {
+    baseUrl: string;
+    username: string;
+    password: string;
+    projects: string[];
+  }) {
+    if (jiraSaving) return;
+    setJiraSaving(true);
+    setJiraError(null);
+    try {
+      const connection = await configureJiraConnection(input);
+      const nextProjects = await listProjects();
+      setJiraConnection(connection);
+      setProjects(nextProjects);
+      setJiraDialogOpen(false);
+      changeProject(connection.projectId);
+      await refreshTasks(connection.projectId);
+      setAnnouncement(text(
+        `已同步 ${connection.displayName ?? connection.username} 的 Jira 任務`,
+        `Synced Jira issues for ${connection.displayName ?? connection.username}`,
+      ));
+    } catch (error) {
+      setJiraError(errorMessage(error));
+    } finally {
+      setJiraSaving(false);
+    }
+  }
+
+  async function syncJiraNow() {
+    if (jiraSyncing || !selectedProjectId) return;
+    setJiraSyncing(true);
+    setActionError(null);
+    try {
+      const connection = await syncJiraConnection();
+      setJiraConnection(connection);
+      await Promise.all([
+        refreshTasks(selectedProjectId, { quiet: true }),
+        refreshProjectList(),
+      ]);
+      setAnnouncement(text("Jira 任務已同步", "Jira issues synced"));
+    } catch (error) {
+      setActionError(errorMessage(error));
+    } finally {
+      setJiraSyncing(false);
+    }
+  }
+
   function openCreateProjectDialog() {
     setProjectMenuOpen(false);
     setProjectContextMenu(null);
@@ -2527,6 +2696,19 @@ export function App() {
                       type="button"
                       role="menuitem"
                       disabled={openingProjectId !== null}
+                      onClick={openJiraDialog}
+                    >
+                      <LinearIcon className="project-avatar" name="link" />
+                      <span>
+                        {jiraConnection?.configured
+                          ? text("Jira 設定", "Jira settings")
+                          : text("連線 Jira", "Connect Jira")}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      disabled={openingProjectId !== null}
                       onClick={openCreateProjectDialog}
                     >
                       <TaskboardIcon className="project-avatar" name="create" />
@@ -2551,7 +2733,19 @@ export function App() {
                 onChange={(options) => void saveProjectAutomation(options)}
               />
             )}
-            {selectedProjectId && boardView !== "workflow" && (
+            {isJiraProject && (
+              <button
+                className="icon-button"
+                type="button"
+                disabled={jiraSyncing}
+                onClick={() => void syncJiraNow()}
+                aria-label={text("同步 Jira", "Sync Jira")}
+                title={text("同步 Jira", "Sync Jira")}
+              >
+                <LinearIcon name="recurrence" />
+              </button>
+            )}
+            {selectedProjectId && !isJiraProject && boardView !== "workflow" && (
               <button
                 className="icon-button header-create-button"
                 type="button"
@@ -2691,12 +2885,15 @@ export function App() {
         {(loadError || actionErrorText) && (
           <div className="error-banner" role="alert">
             <span className="error-mark" aria-hidden="true"><LinearIcon name="alert" /></span>
-            <div><strong>{text("任務面板需要處理", "Taskboard needs attention")}</strong><p>{actionErrorText ?? loadError}</p></div>
+            <div><strong>{text("任務面板需要處理", "Taskboard needs attention")}</strong><p>{actionErrorText ?? loadError?.message}</p></div>
             <button
               type="button"
               onClick={() => {
                 setActionError(null);
-                if (selectedProjectId) void refreshTasks(selectedProjectId);
+                if (loadError?.source === "projects") {
+                  if (loadError.operation === "initial") void loadProjectList();
+                  else void refreshProjectList();
+                } else if (selectedProjectId) void refreshTasks(selectedProjectId);
                 else void loadProjectList();
               }}
             >
@@ -2716,6 +2913,8 @@ export function App() {
             developmentScanLoading={developmentScanLoading}
             commentsRevision={commentsRevision}
             attachmentsRevision={attachmentsRevision}
+            onCreateLabel={persistProjectLabel}
+            onDeleteLabel={removeProjectLabel}
             onUpdate={(current, changes) => updateTaskProperties(current, changes)}
             onOpenTask={openTaskDetail}
             onAddRelation={(current, type, relatedTaskId) => (
@@ -2826,6 +3025,8 @@ export function App() {
                         contextMenuTaskId={contextMenu?.taskId ?? null}
                         availableLabels={availableLabels}
                         currentUser={currentUser}
+                        createEnabled={!isJiraProject}
+                        onCreateLabel={persistProjectLabel}
                         onCreate={(initialStatus) => setEditor({ task: null, status: initialStatus })}
                         onEdit={openTaskDetail}
                         onUpdate={updateTaskProperties}
@@ -2857,10 +3058,13 @@ export function App() {
                     contextMenuTaskId={contextMenu?.taskId ?? null}
                     availableLabels={availableLabels}
                     currentUser={currentUser}
+                    onCreateLabel={persistProjectLabel}
                     restoringTaskId={restoringTaskId}
                     deletingTaskId={deletingArchivedTaskId}
                     onTabChange={setOtherTasksTab}
-                    onCreate={(initialStatus) => setEditor({ task: null, status: initialStatus })}
+                    onCreate={isJiraProject
+                      ? undefined
+                      : (initialStatus) => setEditor({ task: null, status: initialStatus })}
                     onRestore={(task) => void restoreArchivedTask(task)}
                     onDelete={setPendingArchivedTaskDelete}
                     onEdit={openTaskDetail}
@@ -2900,6 +3104,18 @@ export function App() {
             <span className="context-menu-label">{text("刪除專案", "Delete project")}</span>
           </button>
         </div>
+      )}
+
+      {jiraDialogOpen && (
+        <JiraConnectionDialog
+          connection={jiraConnection}
+          saving={jiraSaving}
+          error={jiraError}
+          onClose={() => {
+            if (!jiraSaving) setJiraDialogOpen(false);
+          }}
+          onSave={saveJiraConnection}
+        />
       )}
 
       {projectCreateOpen && (
@@ -3087,6 +3303,7 @@ export function App() {
           currentUser={currentUser}
           developmentScan={developmentScan}
           developmentScanLoading={developmentScanLoading}
+          onCreateLabel={persistProjectLabel}
           onCancel={(draft) => {
             if (!editor.task) setNewTaskDraft(draft);
             setEditor(null);

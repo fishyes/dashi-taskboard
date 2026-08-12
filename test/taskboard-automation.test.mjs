@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import path from "node:path";
 import { test } from "node:test";
 
 import {
@@ -185,6 +186,24 @@ test("the stable name and generated prompt are project-scoped and encode the cla
   assert.match(prompt, /關鍵改動、驗證結果、執行結果和剩餘風險/);
   assert.match(prompt, /in_review/);
   assert.match(prompt, /已綁定.*branch.*worktree/);
+});
+
+test("the generated automation command uses an argv runtime file instead of an env assignment", () => {
+  const previous = process.env.CODEX_TASKBOARD_RUNTIME_FILE;
+  const runtimeFile = "/Users/example/Library/Application Support/Codex Taskboard/launcher-runtime.json";
+  process.env.CODEX_TASKBOARD_RUNTIME_FILE = runtimeFile;
+  try {
+    const prompt = buildTaskboardAutomationPrompt(baseRequest);
+    const cliPath = path.resolve(path.dirname(baseRequest.skillPath), "../..", "cli/taskctl.mjs");
+    assert.ok(prompt.includes(`'${process.execPath}' '${cliPath}' --runtime-file '${runtimeFile}'`));
+    assert.doesNotMatch(prompt, /CODEX_TASKBOARD_RUNTIME_FILE=/);
+  } finally {
+    if (previous === undefined) {
+      delete process.env.CODEX_TASKBOARD_RUNTIME_FILE;
+    } else {
+      process.env.CODEX_TASKBOARD_RUNTIME_FILE = previous;
+    }
+  }
 });
 
 test("the generated cron spec uses the selected whitelisted local Codex options", () => {
