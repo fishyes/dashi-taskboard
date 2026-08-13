@@ -331,6 +331,14 @@ export function subscribeAiChatThread(
   onHint: (type: "ai.event" | "ai.run") => void,
   onError?: () => void,
 ): () => void {
+  // opaque Codex iframe 以短輪詢取代無法經 CDP proxy 串流的 EventSource。
+  if (window.location.origin === "null") {
+    const interval = window.setInterval(() => {
+      onHint("ai.event");
+      onHint("ai.run");
+    }, 1_500);
+    return () => window.clearInterval(interval);
+  }
   const source = new EventSource(
     resolveTaskboardUrl(`/api/local/ai/threads/${encodeURIComponent(threadId)}/events`),
   );

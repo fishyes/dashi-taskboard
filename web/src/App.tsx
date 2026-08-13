@@ -519,6 +519,36 @@ function LocalRealtimeSync({
   setAttachmentsRevision,
 }: LocalRealtimeSyncProps) {
   useEffect(() => {
+    // Codex 的 opaque sandbox 由 injector 代理 HTTP；SSE 無法安全穿過該通道。
+    if (window.location.origin === "null") {
+      let refreshInFlight = false;
+      const refreshAll = async () => {
+        if (refreshInFlight) return;
+        refreshInFlight = true;
+        try {
+          await refreshProjectList();
+          if (selectedProjectId) {
+            await Promise.all([
+              refreshTasks(selectedProjectId, { quiet: true }),
+              refreshWorkflowOptions(selectedProjectId),
+            ]);
+          }
+          if (detailTaskId) {
+            setCommentsRevision((current) => current + 1);
+            setAttachmentsRevision((current) => current + 1);
+          }
+          setConnection("live");
+        } catch {
+          setConnection("reconnecting");
+        } finally {
+          refreshInFlight = false;
+        }
+      };
+      void refreshAll();
+      const refreshInterval = window.setInterval(() => void refreshAll(), 2_000);
+      return () => window.clearInterval(refreshInterval);
+    }
+
     const source = new EventSource(resolveTaskboardUrl("/api/events"));
     let refreshTimer: number | undefined;
     let refreshProjectsPending = false;

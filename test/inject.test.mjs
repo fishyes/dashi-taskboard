@@ -10,11 +10,12 @@ const sourceUrl = new URL("../inject/codex-taskboard.user.js", import.meta.url);
 const source = (await readFile(sourceUrl, "utf8")).replace(/\r\n/g, "\n");
 const webStyles = await readFile(new URL("../web/src/styles.css", import.meta.url), "utf8");
 const webApp = await readFile(new URL("../web/src/App.tsx", import.meta.url), "utf8");
+const webApi = await readFile(new URL("../web/src/api.ts", import.meta.url), "utf8");
 const embeddedHost = await readFile(new URL("../web/src/embeddedHost.mjs", import.meta.url), "utf8");
 
 test("injection is an idempotent IIFE guarded by its current source hash", () => {
   assert.match(source, /^\(\(\) => \{/);
-  assert.match(source, /const VERSION = "0\.6\.16"/);
+  assert.match(source, /const VERSION = "0\.6\.17"/);
   assert.match(source, /const SOURCE_HASH = window\.__CODEX_TASKBOARD_SOURCE_HASH__/);
   assert.match(source, /const SENTINEL_KEY = "__codexTaskboardInjection__"/);
   assert.match(source, /previous\?\.sourceHash === SOURCE_HASH/);
@@ -23,20 +24,22 @@ test("injection is an idempotent IIFE guarded by its current source hash", () =>
   assert.match(source, /window\[SENTINEL_KEY\] = api/);
 });
 
-test("embedded page navigates to the authenticated loopback origin after host verification", () => {
+test("embedded page stays inside an opaque sandbox after host verification", () => {
   assert.match(source, /http:\/\/127\.0\.0\.1:47823\/\?host=codex/);
   assert.match(source, /window\.__CODEX_TASKBOARD_URL__/);
   assert.match(source, /nextFrame\.name = frameName/);
   assert.match(source, /nextFrame\.src = "about:blank"/);
   assert.match(source, /requestHost\("load-frame", \{ frameName, frameCapability: capability \}\)/);
-  assert.match(source, /navigateVerifiedTaskboardFrame\(frameRequest, response\)/);
-  assert.match(source, /frame\.src = response\.frameUrl/);
   assert.match(source, /frameCapability = crypto\.randomUUID\(\)/);
-  assert.match(source, /nextFrame\.setAttribute\("sandbox", "allow-scripts allow-same-origin/);
+  assert.match(source, /nextFrame\.setAttribute\("sandbox", "allow-scripts/);
   assert.match(source, /taskboardOrigin = taskboardUrl\.origin/);
-  assert.match(source, /frameOrigin = taskboardUrl\.origin/);
-  assert.match(embeddedHost, /window\.location\.hash/);
-  assert.match(embeddedHost, /codex-frame-capability/);
+  assert.match(source, /frameOrigin = "null"/);
+  assert.doesNotMatch(source, /allow-same-origin/);
+  assert.match(embeddedHost, /__CODEX_TASKBOARD_FRAME_CAPABILITY__/);
+  assert.match(webApp, /window\.location\.origin === "null"/);
+  assert.match(webApp, /window\.setInterval\(\(\) => void refreshAll\(\), 2_000\)/);
+  assert.match(webApi, /window\.location\.origin === "null"/);
+  assert.match(webApi, /window\.setInterval\(\(\) => \{/);
 });
 
 test("entry clones the native Plugins row and the page covers the complete Codex workspace", () => {

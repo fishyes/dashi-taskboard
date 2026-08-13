@@ -22,9 +22,9 @@ test("the resident injector authenticates its launcher-managed Taskboard service
   assert.match(source, /x-codex-taskboard-challenge/);
   assert.match(source, /proof/);
   assert.match(source, /taskboardInstanceSecret/);
-  assert.match(source, /verifiedTaskboardFrameUrl/);
-  assert.match(source, /"codex-frame-capability"/);
-  assert.doesNotMatch(source, /Page\.setDocumentContent/);
+  assert.match(source, /verifiedTaskboardDocument/);
+  assert.match(source, /Page\.setDocumentContent/);
+  assert.match(source, /__CODEX_TASKBOARD_FRAME_CAPABILITY__/);
   assert.match(runtimeSource, /request\.action === "load-frame"/);
   assert.match(supervisorSource, /ensureInFlight/);
   assert.match(supervisorSource, /await terminateManagedChild\(managedChild\)/);
@@ -32,6 +32,18 @@ test("the resident injector authenticates its launcher-managed Taskboard service
   assert.match(source, /it will be restarted automatically/);
   assert.match(source, /AbortSignal\.timeout\(1_500\)/);
   assert.match(runtimeSource, /request\.frameCapability/);
+});
+
+test("the resident injector proxies only its authenticated loopback instance", () => {
+  assert.match(source, /function installTaskboardLoopbackProxy/);
+  assert.match(source, /cdp\.on\("Fetch\.requestPaused"/);
+  assert.match(source, /cdp\.send\("Fetch\.enable"/);
+  assert.match(source, /urlPattern: `\$\{taskboardBaseUrl\}\/\*`/);
+  assert.match(source, /requestUrl\.origin !== taskboardOrigin/);
+  assert.match(source, /requestUrl\.pathname\.startsWith\(taskboardPathPrefix\)/);
+  assert.match(source, /cdp\.send\("Fetch\.fulfillRequest"/);
+  assert.match(source, /access-control-allow-origin", value: "null"/);
+  assert.match(source, /if \(keepAlive\) await installTaskboardLoopbackProxy\(cdp\)/);
 });
 
 test("the CDP bridge accepts service ensure and native instruction composer prefill actions", () => {

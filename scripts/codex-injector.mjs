@@ -94,6 +94,7 @@ const quotaPolicyQueues = new Map();
 const quotaPolicyCdps = new Set();
 const restoredQuotaPolicyCdps = new WeakSet();
 const quotaPolicyRestorePromises = new WeakMap();
+const taskboardProxyCdps = new WeakSet();
 let quotaPoliciesLoadPromise = null;
 let quotaPoliciesWritePromise = Promise.resolve();
 
@@ -855,7 +856,7 @@ function findFrameByName(frameTree, frameName) {
   return null;
 }
 
-async function verifiedTaskboardFrameUrl(frameCapability) {
+async function verifiedTaskboardDocument(frameCapability) {
   const challenge = randomBytes(32).toString("hex");
   const response = await fetch(taskboardPageUrl, {
     cache: "no-store",
@@ -873,25 +874,143 @@ async function verifiedTaskboardFrameUrl(frameCapability) {
   const html = await response.text();
   const head = "<head>";
   if (!html.includes(head)) throw new Error("Taskboard document has no head element");
-  const frameUrl = new URL(taskboardPageUrl);
-  frameUrl.hash = new URLSearchParams({
-    "codex-frame-capability": frameCapability,
-  }).toString();
-  return frameUrl.href;
+  return html.replace(
+    head,
+    `${head}<base href=${JSON.stringify(taskboardPageUrl)}><script>globalThis.__CODEX_TASKBOARD_FRAME_CAPABILITY__=${
+      JSON.stringify(frameCapability)
+    };</script>`,
+  );
 }
 
 async function loadTaskboardFrameViaCdp(cdp, frameName, frameCapability) {
-  const frameUrl = await verifiedTaskboardFrameUrl(frameCapability);
+  const html = await verifiedTaskboardDocument(frameCapability);
   const deadline = Date.now() + 5_000;
   while (Date.now() < deadline) {
     const { frameTree } = await cdp.send("Page.getFrameTree");
     const targetFrame = findFrameByName(frameTree, frameName);
     if (targetFrame) {
-      return { loaded: true, frameUrl };
+      await cdp.send("Page.setDocumentContent", {
+        frameId: targetFrame.id,
+        html,
+      });
+      return { loaded: true };
     }
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
   throw new Error("Timed out waiting for the isolated Taskboard frame");
+}
+
+function taskboardProxyCorsHeaders(requestHeaders = {}) {
+  const requestedHeaders = requestHeaders["access-control-request-headers"]
+    || requestHeaders["Access-Control-Request-Headers"]
+    || "content-type, x-taskboard-user-id, x-taskboard-user-name, x-taskboard-user-avatar";
+  const requestedMethod = requestHeaders["access-control-request-method"]
+    || requestHeaders["Access-Control-Request-Method"]
+    || "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS";
+  return [
+    { name: "access-control-allow-origin", value: "null" },
+    { name: "access-control-allow-methods", value: requestedMethod },
+    { name: "access-control-allow-headers", value: requestedHeaders },
+    { name: "access-control-allow-private-network", value: "true" },
+  ];
+}
+
+function taskboardProxyRequestBody(request) {
+  if (request.method === "GET" || request.method === "HEAD") return undefined;
+  if (request.postDataEntries?.length) {
+    return Buffer.concat(request.postDataEntries.map((entry) => (
+      Buffer.from(entry.bytes || "", "base64")
+    )));
+  }
+  return request.postData === undefined ? undefined : Buffer.from(request.postData, "utf8");
+}
+
+async function fulfillTaskboardProxyRequest(cdp, event) {
+  const requestUrl = new URL(event.request.url);
+  const taskboardPathPrefix = `/${encodeURIComponent(taskboardInstanceToken)}/`;
+  if (
+    requestUrl.origin !== taskboardOrigin
+    || !requestUrl.pathname.startsWith(taskboardPathPrefix)
+    || requestUrl.username
+    || requestUrl.password
+  ) {
+    await cdp.send("Fetch.failRequest", {
+      requestId: event.requestId,
+      errorReason: "BlockedByClient",
+    });
+    return;
+  }
+
+  const corsHeaders = taskboardProxyCorsHeaders(event.request.headers);
+  if (event.request.method === "OPTIONS") {
+    await cdp.send("Fetch.fulfillRequest", {
+      requestId: event.requestId,
+      responseCode: 204,
+      responseHeaders: corsHeaders,
+    });
+    return;
+  }
+
+  try {
+    const headers = new Headers(event.request.headers);
+    for (const name of [
+      "accept-encoding",
+      "connection",
+      "content-length",
+      "host",
+      "proxy-connection",
+      "transfer-encoding",
+    ]) {
+      headers.delete(name);
+    }
+    headers.set("origin", "null");
+    const body = taskboardProxyRequestBody(event.request);
+    const response = await fetch(requestUrl, {
+      method: event.request.method,
+      headers,
+      ...(body === undefined ? {} : { body }),
+      redirect: "manual",
+      signal: AbortSignal.timeout(30_000),
+    });
+    const responseHeaders = [];
+    response.headers.forEach((value, name) => {
+      if (![
+        "access-control-allow-origin",
+        "connection",
+        "content-encoding",
+        "content-length",
+        "transfer-encoding",
+      ].includes(name.toLowerCase())) {
+        responseHeaders.push({ name, value });
+      }
+    });
+    responseHeaders.push(...corsHeaders);
+    const responseBody = event.request.method === "HEAD"
+      ? ""
+      : Buffer.from(await response.arrayBuffer()).toString("base64");
+    await cdp.send("Fetch.fulfillRequest", {
+      requestId: event.requestId,
+      responseCode: response.status,
+      responsePhrase: response.statusText,
+      responseHeaders,
+      body: responseBody,
+    });
+  } catch (error) {
+    logInjector(`Taskboard proxy failed for ${requestUrl.pathname}: ${error.message}`);
+    await cdp.send("Fetch.failRequest", {
+      requestId: event.requestId,
+      errorReason: "Failed",
+    }).catch(() => {});
+  }
+}
+
+async function installTaskboardLoopbackProxy(cdp) {
+  if (taskboardProxyCdps.has(cdp)) return;
+  cdp.on("Fetch.requestPaused", (event) => fulfillTaskboardProxyRequest(cdp, event));
+  await cdp.send("Fetch.enable", {
+    patterns: [{ urlPattern: `${taskboardBaseUrl}/*`, requestStage: "Request" }],
+  });
+  taskboardProxyCdps.add(cdp);
 }
 
 async function openWithDefaultApplication(target) {
@@ -1546,6 +1665,7 @@ async function injectTarget(
     await cdp.send("Page.enable");
     await cdp.send("Page.setBypassCSP", { enabled: true });
     await cdp.send("Runtime.enable");
+    if (keepAlive) await installTaskboardLoopbackProxy(cdp);
     if (keepAlive) await hostBridge.install();
     if (keepAlive && attachExisting) {
       const currentStatus = await readInjectionStatus(cdp);
