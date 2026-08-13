@@ -177,7 +177,7 @@ test("the stable name and generated prompt are project-scoped and encode the cla
   assert.match(prompt, /每 5 分鐘檢查/);
   assert.match(prompt, /ppt-skill/);
   assert.match(prompt, /\/Users\/example\/Documents\/ppt-skill/);
-  assert.match(prompt, /每次僅處理一個 todo/);
+  assert.match(prompt, /每次僅處理一個符合依賴條件的 todo/);
   assert.match(prompt, /issue get/);
   assert.match(prompt, /comment list/);
   assert.match(prompt, /最新 version/);
@@ -195,7 +195,9 @@ test("the generated automation command uses an argv runtime file instead of an e
   try {
     const prompt = buildTaskboardAutomationPrompt(baseRequest);
     const cliPath = path.resolve(path.dirname(baseRequest.skillPath), "../..", "cli/taskctl.mjs");
-    assert.ok(prompt.includes(`'${process.execPath}' '${cliPath}' --runtime-file '${runtimeFile}'`));
+    assert.ok(prompt.includes(
+      `'${process.execPath}' '${cliPath}' --runtime-file '${process.env.CODEX_TASKBOARD_RUNTIME_FILE}'`,
+    ));
     assert.doesNotMatch(prompt, /CODEX_TASKBOARD_RUNTIME_FILE=/);
   } finally {
     if (previous === undefined) {

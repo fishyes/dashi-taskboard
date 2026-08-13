@@ -11,21 +11,36 @@ function executableFile(candidate) {
   }
 }
 
-function executableOnPath(env) {
+function executableOnPath(env, platform) {
   for (const directory of (env.PATH || "").split(path.delimiter)) {
     if (!directory) continue;
-    const executableName = process.platform === "win32" ? "codex.exe" : "codex";
-    const candidate = executableFile(path.join(directory, executableName));
-    if (candidate) return candidate;
+    if (platform === "win32") {
+      const nativeExecutable = executableFile(path.join(directory, "codex.exe"));
+      if (nativeExecutable) return nativeExecutable;
+
+      const npmEntry = executableFile(path.join(
+        directory,
+        "node_modules",
+        "@openai",
+        "codex",
+        "bin",
+        "codex.js",
+      ));
+      if (npmEntry) return npmEntry;
+      continue;
+    }
+
+    const executable = executableFile(path.join(directory, "codex"));
+    if (executable) return executable;
   }
   return null;
 }
 
-function codexExecutableInWindowsNpm(env) {
-  if (process.platform !== "win32") return null;
+function codexExecutableInWindowsNpm(env, platform = process.platform, architecture = process.arch) {
+  if (platform !== "win32") return null;
 
-  const packageArch = process.arch === "arm64" ? "arm64" : "x64";
-  const rustTarget = process.arch === "arm64"
+  const packageArch = architecture === "arm64" ? "arm64" : "x64";
+  const rustTarget = architecture === "arm64"
     ? "aarch64-pc-windows-msvc"
     : "x86_64-pc-windows-msvc";
   const prefixes = [
@@ -74,10 +89,10 @@ export function resolveCodexExecutable({
     if (bundled) return bundled;
   }
 
-  const windowsNpmCli = codexExecutableInWindowsNpm(env);
+  const windowsNpmCli = codexExecutableInWindowsNpm(env, platform);
   if (windowsNpmCli) return windowsNpmCli;
 
-  const installedCli = executableOnPath(env);
+  const installedCli = executableOnPath(env, platform);
   if (installedCli) return installedCli;
 
   if (platform === "darwin") {

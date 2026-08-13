@@ -60,7 +60,7 @@ test("new issues stage attachments in the composer and upload them after creatio
   assert.match(pendingAttachmentsSource, /className="composer-attachment-list"/);
   assert.match(appSource, /Promise\.allSettled/);
   assert.match(appSource, /uploadAttachment\(saved\.id, file\)/);
-  assert.match(appSource, /附件上傳失敗，可在詳細資料頁面重試/);
+  assert.match(appSource, /zh: `\$\{failedAttachments\} 個附件`[\s\S]*?以下內容寫入失敗/);
 });
 
 test("the issue composer includes Linear-style labels and scheduling", () => {
@@ -116,7 +116,8 @@ test("embedded mode omits the app navigation and keeps a draggable header region
 });
 
 test("realtime updates remain active on the project home and reconcile after reconnecting", () => {
-  assert.match(appSource, /useEffect\(\(\) => \{\s*const source = new EventSource\(resolveTaskboardUrl\("\/api\/events"\)\)/);
+  assert.match(appSource, /window\.location\.origin === "null"[\s\S]*?window\.setInterval\(\(\) => void refreshAll\(\), 2_000\)/);
+  assert.match(appSource, /const source = new EventSource\(resolveTaskboardUrl\("\/api\/events"\)\)/);
   assert.match(appSource, /event\.type\.startsWith\("task\."\)[\s\S]*?scheduleRefresh\(\{ projects: true, tasks: affectsSelectedProject \}\)/);
   assert.match(appSource, /source\.onopen = \(\) => \{[\s\S]*?scheduleRefresh\(\{ projects: true, tasks: Boolean\(selectedProjectId\) \}\)/);
 });
