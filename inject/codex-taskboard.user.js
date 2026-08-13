@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "0.6.15";
+  const VERSION = "0.6.16";
   const SOURCE_HASH = window.__CODEX_TASKBOARD_SOURCE_HASH__;
   const SENTINEL_KEY = "__codexTaskboardInjection__";
   const DEFAULT_TASKBOARD_URL = "http://127.0.0.1:47823/?host=codex";
@@ -28,6 +28,7 @@
   const HOST_HEARTBEAT_MAX_AGE_MS = 8_000;
   const MACOS_TITLEBAR_SAFE_LEFT = 80;
   const FRAME_REFRESH_PARAM = "__codex_taskboard_refresh";
+  const FRAME_CAPABILITY_FRAGMENT = "codex-frame-capability";
   // 簡體別名僅用於辨識不同語系的 Codex 主程式，不會顯示在任務面板介面。
   const PLUGIN_LABELS = ["外掛", "外掛程式", "插件", "plugins"];
   const NATIVE_PAGE_LABELS = [
@@ -1191,14 +1192,18 @@
     }
     taskboardOrigin = taskboardUrl.origin;
     frameTaskboardUrl = taskboardUrl.href;
-    frameOrigin = "null";
+    // Chrome 142+ 的 Local Network Access 會拒絕 opaque `null` origin
+    // 載入 loopback 子資源；服務身分通過 host 驗證後才導向同源頁面。
+    frameOrigin = taskboardUrl.origin;
     const frameName = `codex-taskboard-${crypto.randomUUID()}`;
     frameCapability = crypto.randomUUID();
     const nextFrame = document.createElement("iframe");
     nextFrame.id = FRAME_ID;
     nextFrame.name = frameName;
     nextFrame.hidden = true;
-    nextFrame.setAttribute("sandbox", "allow-scripts allow-forms allow-modals allow-downloads");
+    // iframe 與 app://- 父頁仍為跨來源；allow-same-origin 只讓 loopback 頁面
+    // 保留自己的來源，使 JS/CSS/API 不觸發 null -> loopback 的 LNA 拒絕。
+    nextFrame.setAttribute("sandbox", "allow-scripts allow-same-origin allow-forms allow-modals allow-downloads");
     nextFrame.src = "about:blank";
     nextFrame.title = hostText("任務面板", "Taskboard");
     nextFrame.referrerPolicy = "no-referrer";
@@ -1215,6 +1220,7 @@
     if (active) showLoading();
     const frameRequest = loadTaskboardFrame(true);
     void requestHostLoadFrame(frameRequest)
+      .then((response) => navigateVerifiedTaskboardFrame(frameRequest, response))
       .then(() => waitForFrameReady())
       .then(() => {
           if (!active || generation !== openGeneration) return;
@@ -1286,6 +1292,29 @@
     return requestHost("load-frame", { frameName, frameCapability: capability });
   }
 
+  function navigateVerifiedTaskboardFrame(frameRequest, response) {
+    if (!frame || frame.name !== frameRequest.frameName || !response?.loaded) {
+      throw hostError("任務面板驗證結果無效", "The verified Taskboard frame is invalid");
+    }
+    let verifiedUrl;
+    try {
+      verifiedUrl = new URL(response.frameUrl);
+    } catch (_) {
+      throw hostError("任務面板網址無效", "The verified Taskboard URL is invalid");
+    }
+    const expectedUrl = new URL(frameTaskboardUrl);
+    const capability = new URLSearchParams(verifiedUrl.hash.slice(1))
+      .get(FRAME_CAPABILITY_FRAGMENT);
+    verifiedUrl.hash = "";
+    if (
+      verifiedUrl.href !== expectedUrl.href
+      || capability !== frameRequest.frameCapability
+    ) {
+      throw hostError("任務面板驗證結果不符", "The verified Taskboard frame does not match");
+    }
+    frame.src = response.frameUrl;
+  }
+
   function requestHostTaskComposerPrefill({ instruction }) {
     return requestHost("prefill-task-composer", {
       instruction,
@@ -1355,7 +1384,8 @@
       if (!frameReady || result.restarted || !frameMatchesTaskboardUrl(taskboardUrl)) {
         showLoading();
         const frameRequest = loadTaskboardFrame();
-        await requestHostLoadFrame(frameRequest);
+        const frameResponse = await requestHostLoadFrame(frameRequest);
+        navigateVerifiedTaskboardFrame(frameRequest, frameResponse);
         await waitForFrameReady();
       }
       if (!active || generation !== openGeneration) return;

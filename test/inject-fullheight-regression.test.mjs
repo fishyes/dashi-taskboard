@@ -27,6 +27,35 @@ const embeddedHostSource = await readFile(
 );
 const embeddedHostClassicSource = embeddedHostSource.replaceAll("export ", "");
 
+function taskboardFrameHtml() {
+  return `<!doctype html>
+<html>
+  <body>
+    <a id="external-link" href="https://example.com/review" target="_blank">Review</a>
+    <script>
+      ${embeddedHostClassicSource}
+      installEmbeddedExternalLinkHandler();
+      let activated = false;
+      let acknowledgedChallenge = "";
+      window.addEventListener("message", (event) => {
+        if (event.data?.type !== "taskboard:frame-challenge") return;
+        const challenge = event.data.payload?.challenge;
+        if (!challenge || challenge === acknowledgedChallenge) return;
+        acknowledgedChallenge = challenge;
+        setEmbeddedFrameChallenge(challenge);
+        postEmbeddedHostMessage({ type: "taskboard:ready" });
+        if (activated) return;
+        activated = true;
+        parent.postMessage({ type: "taskboard:ready" }, "*");
+        parent.postMessage({ type: "taskboard:open-thread", payload: { threadId: "forged" } }, "*");
+        document.getElementById("external-link").click();
+      });
+      postEmbeddedHostMessage({ type: "taskboard:frame-awaiting-challenge" });
+    <\/script>
+  </body>
+</html>`;
+}
+
 async function chromeExecutable() {
   const candidates = [
     process.env.CHROME_PATH,
@@ -115,7 +144,11 @@ function fixtureHtml(origin) {
       });
       window.addEventListener("message", (event) => {
         if (typeof event.data?.type === "string" && event.data.type.startsWith("taskboard:")) {
-          window.__frameMessages.push({ type: event.data.type, origin: event.origin });
+          const taskboardOrigin = new URL(window.__CODEX_TASKBOARD_URL__).origin;
+          window.__frameMessages.push({
+            type: event.data.type,
+            origin: event.origin === taskboardOrigin ? "taskboard" : event.origin,
+          });
         }
         if (
           event.source === window
@@ -124,40 +157,35 @@ function fixtureHtml(origin) {
         ) {
           const request = event.data.payload;
           if (request.action === "load-frame") {
-            const frame = document.querySelector('iframe[name="' + request.frameName + '"]');
-            frame.srcdoc = '<a id="external-link" href="https://example.com/review" target="_blank">Review</a>'
-              + '<script>'
-              + ${JSON.stringify(embeddedHostClassicSource)}
-              + '\\nglobalThis.__CODEX_TASKBOARD_FRAME_CAPABILITY__='
-              + JSON.stringify(request.frameCapability)
-              + ';installEmbeddedExternalLinkHandler();'
-              + 'let activated=false,acknowledgedChallenge="";window.addEventListener("message",function(event){'
-              + 'if(event.data?.type!=="taskboard:frame-challenge")return;'
-              + 'const challenge=event.data.payload?.challenge;if(!challenge||challenge===acknowledgedChallenge)return;'
-              + 'acknowledgedChallenge=challenge;setEmbeddedFrameChallenge(challenge);'
-              + 'postEmbeddedHostMessage({type:"taskboard:ready"});'
-              + 'if(activated)return;activated=true;'
-              + 'parent.postMessage({type:"taskboard:ready"},"*");'
-              + 'parent.postMessage({type:"taskboard:open-thread",payload:{threadId:"forged"}},"*");'
-              + 'document.getElementById("external-link").click();'
-              + '});postEmbeddedHostMessage({type:"taskboard:frame-awaiting-challenge"});<\\/script>';
+            const frameUrl = new URL(window.__CODEX_TASKBOARD_URL__);
+            frameUrl.hash = new URLSearchParams({
+              "codex-frame-capability": request.frameCapability,
+            }).toString();
+            request.frameUrl = frameUrl.href;
           }
           if (request.action === "open-external") {
             window.__externalOpenUrl = request.url;
             const frame = document.getElementById("codex-taskboard-frame");
             window.__frameVisibleBeforeNavigation = frame?.hidden === false;
             window.__statusHiddenBeforeNavigation = document.getElementById("codex-taskboard-status")?.hidden === true;
-            frame?.addEventListener("load", () => {
-              window.__hostileNavigationLoaded = true;
-              window.__resolveHostileNavigationLoaded();
-            }, { once: true });
-            frame.removeAttribute("srcdoc");
-            frame.src = ${JSON.stringify(`${origin}/attacker`)};
+            setTimeout(() => {
+              frame?.addEventListener("load", () => {
+                window.__hostileNavigationLoaded = true;
+                window.__resolveHostileNavigationLoaded();
+              }, { once: true });
+              frame.removeAttribute("srcdoc");
+              frame.src = ${JSON.stringify(`${origin}/attacker`)};
+            }, 0);
           }
           window.postMessage({
             type: "__codexTaskboardHostResponseV1",
             capability: "fullheight-host-capability",
-            response: { id: request.id, ok: true, loaded: true },
+            response: {
+              id: request.id,
+              ok: true,
+              loaded: true,
+              ...(request.frameUrl ? { frameUrl: request.frameUrl } : {}),
+            },
           }, window.location.origin);
         }
         if (event.source === window && event.data?.type === "navigate-to-route") {
@@ -192,7 +220,10 @@ function fixtureHtml(origin) {
           window.__resolveHostileNavigationLoaded = resolve;
         });
         entry?.click();
-        await hostileNavigationLoaded;
+        const hostileNavigationTimedOut = await Promise.race([
+          hostileNavigationLoaded.then(() => false),
+          new Promise((resolve) => setTimeout(() => resolve(true), 3_000)),
+        ]);
 
         const page = document.getElementById("codex-taskboard-page");
         const frame = document.getElementById("codex-taskboard-frame");
@@ -214,6 +245,7 @@ function fixtureHtml(origin) {
           statusHiddenBeforeNavigation: window.__statusHiddenBeforeNavigation,
           hostileNavigationRevoked: Boolean(frame?.hidden && !document.getElementById("codex-taskboard-status")?.hidden),
           forgedThreadOpened: window.__forgedThreadOpened,
+          hostileNavigationTimedOut,
           injectionError: window.__injectionError,
         };
         document.getElementById("result").textContent = btoa(JSON.stringify(result));
@@ -232,7 +264,7 @@ test("Taskboard fills the workspace, opens HTTPS links and revokes hostile ifram
     return;
   }
 
-  const server = http.createServer((request, response) => {
+  const taskboardServer = http.createServer((request, response) => {
     response.setHeader("connection", "close");
     if (request.url === "/attacker") {
       response.setHeader("content-type", "text/html; charset=utf-8");
@@ -240,37 +272,41 @@ test("Taskboard fills the workspace, opens HTTPS links and revokes hostile ifram
       return;
     }
     if (request.url?.startsWith("/taskboard")) {
-      response.setHeader("access-control-allow-origin", "null");
-      response.setHeader("access-control-expose-headers", "x-codex-taskboard-proof");
-      response.setHeader("access-control-allow-private-network", "true");
-      if (request.method === "OPTIONS") {
-        response.statusCode = 204;
-        response.end();
-        return;
-      }
       const challenge = new URL(request.url, "http://127.0.0.1")
         .searchParams.get("__codex_taskboard_challenge");
-      response.setHeader(
-        "x-codex-taskboard-proof",
-        createHmac("sha256", instanceSecret).update(challenge).digest("hex"),
-      );
+      if (challenge) {
+        response.setHeader(
+          "x-codex-taskboard-proof",
+          createHmac("sha256", instanceSecret).update(challenge).digest("hex"),
+        );
+      }
       response.setHeader("content-type", "text/html; charset=utf-8");
-      response.end(`<!doctype html><html><head></head><body><script>parent.postMessage({ type: "taskboard:ready" }, "*")</script></body></html>`);
+      response.end(taskboardFrameHtml());
       return;
     }
-    const origin = `http://127.0.0.1:${server.address().port}`;
-    response.setHeader("content-type", "text/html; charset=utf-8");
-    response.end(fixtureHtml(origin));
+    response.statusCode = 404;
+    response.end();
   });
-  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  await new Promise((resolve) => taskboardServer.listen(0, "127.0.0.1", resolve));
+  const taskboardOrigin = `http://127.0.0.1:${taskboardServer.address().port}`;
+  const fixtureServer = http.createServer((_request, response) => {
+    response.setHeader("connection", "close");
+    response.setHeader("content-type", "text/html; charset=utf-8");
+    response.end(fixtureHtml(taskboardOrigin));
+  });
+  await new Promise((resolve) => fixtureServer.listen(0, "127.0.0.1", resolve));
   t.after(() => new Promise((resolve) => {
-    server.close(resolve);
-    server.closeAllConnections();
+    fixtureServer.close(resolve);
+    fixtureServer.closeAllConnections();
+  }));
+  t.after(() => new Promise((resolve) => {
+    taskboardServer.close(resolve);
+    taskboardServer.closeAllConnections();
   }));
 
   const profile = await mkdtemp(path.join(os.tmpdir(), "taskboard-fullheight-chrome-"));
   t.after(() => rm(profile, { recursive: true, force: true }));
-  const url = `http://127.0.0.1:${server.address().port}/fixture`;
+  const url = `http://127.0.0.1:${fixtureServer.address().port}/fixture`;
   let stdout;
   try {
     ({ stdout } = await execFileAsync(chrome, [
@@ -308,17 +344,18 @@ test("Taskboard fills the workspace, opens HTTPS links and revokes hostile ifram
     frameIsolated: true,
     statusHidden: false,
     frameMessages: [
-      { type: "taskboard:frame-awaiting-challenge", origin: "null" },
-      { type: "taskboard:ready", origin: "null" },
-      { type: "taskboard:ready", origin: "null" },
-      { type: "taskboard:open-thread", origin: "null" },
-      { type: "taskboard:open-external", origin: "null" },
+      { type: "taskboard:frame-awaiting-challenge", origin: "taskboard" },
+      { type: "taskboard:ready", origin: "taskboard" },
+      { type: "taskboard:ready", origin: "taskboard" },
+      { type: "taskboard:open-thread", origin: "taskboard" },
+      { type: "taskboard:open-external", origin: "taskboard" },
     ],
     externalOpenUrl: "https://example.com/review",
     frameVisibleBeforeNavigation: true,
     statusHiddenBeforeNavigation: true,
     hostileNavigationRevoked: true,
     forgedThreadOpened: false,
+    hostileNavigationTimedOut: false,
     injectionError: null,
   });
 });

@@ -855,7 +855,7 @@ function findFrameByName(frameTree, frameName) {
   return null;
 }
 
-async function verifiedTaskboardDocument(frameCapability) {
+async function verifiedTaskboardFrameUrl(frameCapability) {
   const challenge = randomBytes(32).toString("hex");
   const response = await fetch(taskboardPageUrl, {
     cache: "no-store",
@@ -873,24 +873,21 @@ async function verifiedTaskboardDocument(frameCapability) {
   const html = await response.text();
   const head = "<head>";
   if (!html.includes(head)) throw new Error("Taskboard document has no head element");
-  return html.replace(
-    head,
-    `${head}<base href=${JSON.stringify(taskboardPageUrl)}><script>globalThis.__CODEX_TASKBOARD_FRAME_CAPABILITY__=${JSON.stringify(frameCapability)};</script>`,
-  );
+  const frameUrl = new URL(taskboardPageUrl);
+  frameUrl.hash = new URLSearchParams({
+    "codex-frame-capability": frameCapability,
+  }).toString();
+  return frameUrl.href;
 }
 
 async function loadTaskboardFrameViaCdp(cdp, frameName, frameCapability) {
-  const html = await verifiedTaskboardDocument(frameCapability);
+  const frameUrl = await verifiedTaskboardFrameUrl(frameCapability);
   const deadline = Date.now() + 5_000;
   while (Date.now() < deadline) {
     const { frameTree } = await cdp.send("Page.getFrameTree");
     const targetFrame = findFrameByName(frameTree, frameName);
     if (targetFrame) {
-      await cdp.send("Page.setDocumentContent", {
-        frameId: targetFrame.id,
-        html,
-      });
-      return { loaded: true };
+      return { loaded: true, frameUrl };
     }
     await new Promise((resolve) => setTimeout(resolve, 50));
   }

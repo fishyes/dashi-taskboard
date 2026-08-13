@@ -22,14 +22,15 @@ test("the resident injector authenticates its launcher-managed Taskboard service
   assert.match(source, /x-codex-taskboard-challenge/);
   assert.match(source, /proof/);
   assert.match(source, /taskboardInstanceSecret/);
-  assert.match(source, /Page\.setDocumentContent/);
+  assert.match(source, /verifiedTaskboardFrameUrl/);
+  assert.match(source, /"codex-frame-capability"/);
+  assert.doesNotMatch(source, /Page\.setDocumentContent/);
   assert.match(runtimeSource, /request\.action === "load-frame"/);
   assert.match(supervisorSource, /ensureInFlight/);
   assert.match(supervisorSource, /await terminateManagedChild\(managedChild\)/);
   assert.match(source, /await supervisor\.ensure\(\)/);
   assert.match(source, /it will be restarted automatically/);
   assert.match(source, /AbortSignal\.timeout\(1_500\)/);
-  assert.match(source, /__CODEX_TASKBOARD_FRAME_CAPABILITY__/);
   assert.match(runtimeSource, /request\.frameCapability/);
 });
 

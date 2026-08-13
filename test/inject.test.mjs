@@ -14,7 +14,7 @@ const embeddedHost = await readFile(new URL("../web/src/embeddedHost.mjs", impor
 
 test("injection is an idempotent IIFE guarded by its current source hash", () => {
   assert.match(source, /^\(\(\) => \{/);
-  assert.match(source, /const VERSION = "0\.6\.15"/);
+  assert.match(source, /const VERSION = "0\.6\.16"/);
   assert.match(source, /const SOURCE_HASH = window\.__CODEX_TASKBOARD_SOURCE_HASH__/);
   assert.match(source, /const SENTINEL_KEY = "__codexTaskboardInjection__"/);
   assert.match(source, /previous\?\.sourceHash === SOURCE_HASH/);
@@ -23,17 +23,20 @@ test("injection is an idempotent IIFE guarded by its current source hash", () =>
   assert.match(source, /window\[SENTINEL_KEY\] = api/);
 });
 
-test("embedded page uses the launcher URL inside an opaque sandbox", () => {
+test("embedded page navigates to the authenticated loopback origin after host verification", () => {
   assert.match(source, /http:\/\/127\.0\.0\.1:47823\/\?host=codex/);
   assert.match(source, /window\.__CODEX_TASKBOARD_URL__/);
   assert.match(source, /nextFrame\.name = frameName/);
   assert.match(source, /nextFrame\.src = "about:blank"/);
   assert.match(source, /requestHost\("load-frame", \{ frameName, frameCapability: capability \}\)/);
+  assert.match(source, /navigateVerifiedTaskboardFrame\(frameRequest, response\)/);
+  assert.match(source, /frame\.src = response\.frameUrl/);
   assert.match(source, /frameCapability = crypto\.randomUUID\(\)/);
-  assert.match(source, /nextFrame\.setAttribute\("sandbox", "allow-scripts/);
+  assert.match(source, /nextFrame\.setAttribute\("sandbox", "allow-scripts allow-same-origin/);
   assert.match(source, /taskboardOrigin = taskboardUrl\.origin/);
-  assert.match(source, /frameOrigin = "null"/);
-  assert.doesNotMatch(source, /allow-same-origin/);
+  assert.match(source, /frameOrigin = taskboardUrl\.origin/);
+  assert.match(embeddedHost, /window\.location\.hash/);
+  assert.match(embeddedHost, /codex-frame-capability/);
 });
 
 test("entry clones the native Plugins row and the page covers the complete Codex workspace", () => {
@@ -165,7 +168,7 @@ test("reopening reuses a ready cache-busted iframe without showing the startup p
   assert.doesNotMatch(prepareSource, /async function prepareTaskboard\(generation\) \{\s*showLoading\(\);/);
 });
 
-test("opaque iframe messages require the current document capability", () => {
+test("Taskboard iframe messages require the current document capability", () => {
   assert.match(
     source,
     /event\.source !== frame\.contentWindow \|\| event\.origin !== frameOrigin/,

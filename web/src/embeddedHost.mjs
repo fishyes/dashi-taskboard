@@ -1,7 +1,14 @@
 function frameCapability() {
-  return typeof globalThis.__CODEX_TASKBOARD_FRAME_CAPABILITY__ === "string"
-    ? globalThis.__CODEX_TASKBOARD_FRAME_CAPABILITY__
-    : "";
+  if (typeof globalThis.__CODEX_TASKBOARD_FRAME_CAPABILITY__ === "string") {
+    return globalThis.__CODEX_TASKBOARD_FRAME_CAPABILITY__;
+  }
+  try {
+    const capability = new URLSearchParams(window.location.hash.slice(1))
+      .get("codex-frame-capability");
+    return /^[a-f0-9-]{36,80}$/i.test(capability || "") ? capability : "";
+  } catch {
+    return "";
+  }
 }
 
 let activeFrameChallenge = "";
