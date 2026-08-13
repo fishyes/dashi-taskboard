@@ -924,10 +924,14 @@ function resolveApiUrl(baseUrl, pathname) {
 
 async function resolveTaskboardBaseUrl(env, overrides) {
   if (env.CODEX_TASKBOARD_URL !== undefined) return env.CODEX_TASKBOARD_URL;
+  // 預設端點發現順序：外部 launcher 發布到使用者層級 home，上游自帶 launcher
+  // 發布到 vendor 內 .data，兩處都可支援（MSIX/Store 啟動的 Codex 無法繼承 env）。
   const configuredDescriptorPath = env.CODEX_TASKBOARD_RUNTIME_FILE;
-  const descriptorPath = configuredDescriptorPath ?? sourceRuntimeFile;
+  const descriptorPath = configuredDescriptorPath ?? defaultLauncherRuntimeFile(env) ?? sourceRuntimeFile;
   let descriptor;
   try {
+    // 預設發現走真實 fs 讀取（測試裡 readFile 僅用於攔截明確設定路徑，
+    // 避免與 description/attachment 等其他檔案讀取的 mock 衝突）。
     const read = configuredDescriptorPath === undefined
       ? readFile
       : (overrides.readFile ?? readFile);
@@ -951,10 +955,17 @@ async function resolveTaskboardBaseUrl(env, overrides) {
   return descriptor.url;
 }
 
+export function defaultLauncherRuntimeFile(env) {
+  const home = env.USERPROFILE ?? env.HOME;
+  if (!home) return null;
+  return path.join(home, ".codex-pro-max", "launcher-runtime.json");
+}
+
 async function resolveCompanionUrl(env, overrides) {
   const rawUrl = env.CODEX_TASKBOARD_COMPANION_URL !== undefined
     ? env.CODEX_TASKBOARD_COMPANION_URL
     : await resolveTaskboardBaseUrl(env, overrides);
+
   let url;
   try {
     url = new URL(rawUrl);

@@ -2,6 +2,7 @@ node_modules/
 dist/
 .data/
 .wrangler/
+CLAUDE.md
 .dev.vars*
 .tmp/
 cloud-migration-exports/

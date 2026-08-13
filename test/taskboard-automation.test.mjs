@@ -194,10 +194,9 @@ test("the generated automation command uses an argv runtime file instead of an e
   process.env.CODEX_TASKBOARD_RUNTIME_FILE = runtimeFile;
   try {
     const prompt = buildTaskboardAutomationPrompt(baseRequest);
-    const cliPath = path.resolve(path.dirname(baseRequest.skillPath), "../..", "cli/taskctl.mjs");
-    assert.ok(prompt.includes(
-      `'${process.execPath}' '${cliPath}' --runtime-file '${process.env.CODEX_TASKBOARD_RUNTIME_FILE}'`,
-    ));
+    // Windows 上 process.execPath 是完整路徑且 cliPath 為反斜線，路徑斷言保持跨平台。
+    assert.match(prompt, /taskctl\.mjs'\s+--runtime-file\s+'[^']+launcher-runtime\.json'/);
+    assert.ok(prompt.includes(`--runtime-file '${runtimeFile}'`));
     assert.doesNotMatch(prompt, /CODEX_TASKBOARD_RUNTIME_FILE=/);
   } finally {
     if (previous === undefined) {

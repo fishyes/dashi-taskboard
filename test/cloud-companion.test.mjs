@@ -34,11 +34,15 @@ function jsonResponse(payload, status = 200) {
 async function runCli(argv, overrides = {}) {
   const stdout = capture();
   const stderr = capture();
+  const env = {
+    USERPROFILE: path.join(os.tmpdir(), `taskboard-cli-test-home-${process.pid}`),
+    ...(overrides.env ?? {}),
+  };
   const exitCode = await main(argv, {
     stdout: stdout.stream,
     stderr: stderr.stream,
-    env: {},
     ...overrides,
+    env,
   });
   return { exitCode, stdout, stderr };
 }

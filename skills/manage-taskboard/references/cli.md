@@ -24,7 +24,11 @@ taskctl project map PROJECT_ID --workspace-path PATH [--json]
 
 Use `--workspace-path` to associate a project with a local repository. `context current` chooses the most specific project whose workspace contains the current directory, then falls back to the `local` project.
 
-Set `CODEX_TASKBOARD_URL` to override the default local API origin, `http://127.0.0.1:47823`.
+Set `CODEX_TASKBOARD_URL` to override the default local API origin,
+`http://127.0.0.1:47823`. Without an inherited URL, `taskctl` also discovers
+the launcher's token-prefixed endpoint from
+`~/.codex-pro-max/launcher-runtime.json`. An explicit
+`CODEX_TASKBOARD_RUNTIME_FILE` takes precedence over that default file.
 
 For a shared cloud board, keep `taskctl` pointed at the **loopback companion** (local loopback service; see Terminology above) and configure the upstream HTTPS origin through it:
 

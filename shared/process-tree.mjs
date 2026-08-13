@@ -2,6 +2,11 @@ import { spawnSync } from "node:child_process";
 
 export function signalProcessTree(child, signal) {
   if (process.platform === "win32" && Number.isInteger(child?.pid)) {
+    try {
+      if (!child.kill(0)) return;
+    } catch {
+      return;
+    }
     const result = spawnSync(
       "taskkill.exe",
       ["/PID", String(child.pid), "/T", "/F"],

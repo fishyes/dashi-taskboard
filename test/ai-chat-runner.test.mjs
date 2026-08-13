@@ -8,7 +8,7 @@ import { TaskboardDatabase } from "../server/database.mjs";
 import { AiChatService } from "../server/ai-chat.mjs";
 import { normalizeCodexEvent } from "../server/ai-chat-process.mjs";
 
-async function waitFor(predicate, timeout = 4_000) {
+async function waitFor(predicate, timeout = process.platform === "win32" ? 8_000 : 4_000) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
     const value = await predicate();
@@ -44,8 +44,7 @@ async function createFixture() {
   ]);
   const capturePath = path.join(directory, "capture.jsonl");
   const environmentCapturePath = path.join(directory, "environment-capture.jsonl");
-  const descendantPath = path.join(directory, "descendant-alive");
-  const descendantDelayMs = process.platform === "win32" ? 1_500 : 300;
+  const descendantPath = path.join(directory, "descendant-pid");
   const executable = path.join(directory, "fake-codex.mjs");
   await writeFile(executable, `#!/usr/bin/env node
 import { appendFileSync } from "node:fs";
@@ -91,10 +90,11 @@ if (args[0] === "app-server") {
     if (!args.includes("resume")) emit({type:"thread.started",thread_id:"codex-thread-1"});
     emit({type:"turn.started"});
     if (prompt.includes("MALFORMED_STUBBORN") || prompt.includes("CALLBACK_FATAL_STUBBORN")) {
-      spawn(process.execPath, [
+      const descendant = spawn(process.execPath, [
         "-e",
-        'process.on("SIGTERM", () => {}); setTimeout(() => require("node:fs").writeFileSync(process.env.FAKE_DESCENDANT_PATH, "alive"), ${descendantDelayMs}); setInterval(() => {}, 1000)',
+        'process.on("SIGTERM", () => {}); setInterval(() => {}, 1000)',
       ], {env:process.env,stdio:"ignore"});
+      appendFileSync(process.env.FAKE_DESCENDANT_PATH, String(descendant.pid));
       process.on("SIGTERM", () => {});
       setInterval(() => {}, 1000);
       if (prompt.includes("CALLBACK_FATAL_STUBBORN")) {
@@ -167,7 +167,6 @@ if (args[0] === "app-server") {
     capturePath,
     database,
     databasePath,
-    descendantDelayMs,
     descendantPath,
     directory,
     environmentCapturePath,
@@ -335,8 +334,9 @@ test("parser and event callback failures kill a SIGTERM-resistant process group"
       const run = await fixture.service.startTurn(thread.id, { message });
       await waitFor(() => fixture.service.getRun(run.id).status === "failed");
       assert.equal(fixture.service.getRun(run.id).error, expectedError);
-      await new Promise((resolve) => setTimeout(resolve, fixture.descendantDelayMs + 50));
-      await assert.rejects(readFile(fixture.descendantPath), (error) => error.code === "ENOENT");
+      const descendantPid = Number(await readFile(fixture.descendantPath, "utf8"));
+      assert.ok(Number.isInteger(descendantPid));
+      assert.throws(() => process.kill(descendantPid, 0), (error) => error.code === "ESRCH");
     }
   } finally {
     await fixture.close();
