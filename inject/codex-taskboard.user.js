@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "0.6.17";
+  const VERSION = "0.6.18";
   const SOURCE_HASH = window.__CODEX_TASKBOARD_SOURCE_HASH__;
   const SENTINEL_KEY = "__codexTaskboardInjection__";
   const DEFAULT_TASKBOARD_URL = "http://127.0.0.1:47823/?host=codex";
@@ -276,8 +276,11 @@
     const buttons = Array.from(scroll.querySelectorAll("button"));
     const plugin = buttons.find((button) => buttonMatches(button, PLUGIN_LABELS));
     if (plugin && plugin.parentElement) {
-      const siblings = Array.from(plugin.parentElement.children).filter((child) => child.tagName === "BUTTON");
-      if (siblings.length >= 3) return plugin;
+      let group = plugin.parentElement;
+      while (group && group !== scroll) {
+        if (group.querySelectorAll("button").length >= 3) return plugin;
+        group = group.parentElement;
+      }
     }
 
     const firstSection = scroll.querySelector("[data-app-action-sidebar-section]");

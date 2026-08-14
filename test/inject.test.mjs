@@ -15,7 +15,7 @@ const embeddedHost = await readFile(new URL("../web/src/embeddedHost.mjs", impor
 
 test("injection is an idempotent IIFE guarded by its current source hash", () => {
   assert.match(source, /^\(\(\) => \{/);
-  assert.match(source, /const VERSION = "0\.6\.17"/);
+  assert.match(source, /const VERSION = "0\.6\.18"/);
   assert.match(source, /const SOURCE_HASH = window\.__CODEX_TASKBOARD_SOURCE_HASH__/);
   assert.match(source, /const SENTINEL_KEY = "__codexTaskboardInjection__"/);
   assert.match(source, /previous\?\.sourceHash === SOURCE_HASH/);
@@ -44,7 +44,8 @@ test("embedded page stays inside an opaque sandbox after host verification", () 
 
 test("entry clones the native Plugins row and the page covers the complete Codex workspace", () => {
   assert.match(source, /const PLUGIN_LABELS = \["外掛", "外掛程式", "插件", "plugins"\]/);
-  assert.match(source, /if \(siblings\.length >= 3\) return plugin;/);
+  assert.match(source, /while \(group && group !== scroll\)/);
+  assert.match(source, /group\.querySelectorAll\("button"\)\.length >= 3/);
   assert.match(source, /return directButtons\.length >= 3/);
   assert.match(source, /const button = reference\.cloneNode\(true\)/);
   assert.match(source, /reference\.after\(entry\)/);
