@@ -70,9 +70,10 @@ export function validatedLoopbackCdpWebSocketUrl(value, port) {
     throw new Error("Rejected Codex CDP target without a WebSocket URL");
   }
   const debuggerUrl = new URL(value);
+  const loopbackHosts = new Set(["127.0.0.1", "localhost", "[::1]"]);
   if (
     debuggerUrl.protocol !== "ws:"
-    || debuggerUrl.hostname !== "127.0.0.1"
+    || !loopbackHosts.has(debuggerUrl.hostname)
     || debuggerUrl.port !== String(port)
     || !debuggerUrl.pathname.startsWith("/devtools/page/")
     || debuggerUrl.username

@@ -31,6 +31,14 @@ import {
 const injectorPath = fileURLToPath(import.meta.url);
 const projectRoot = path.resolve(path.dirname(injectorPath), "..");
 const defaultCodexDebuggingPort = 9229;
+const configuredCdpHost = process.env.CODEX_TASKBOARD_CDP_HOST?.trim().toLowerCase()
+  || "127.0.0.1";
+const allowedCdpHosts = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
+if (!allowedCdpHosts.has(configuredCdpHost)) {
+  throw new Error("CODEX_TASKBOARD_CDP_HOST must resolve to a loopback address");
+}
+const cdpUrlHost = configuredCdpHost === "::1" ? "[::1]" : configuredCdpHost;
+const cdpOrigin = (port) => `http://${cdpUrlHost}:${port}`;
 const independentCodexProfilePath = process.env.CODEX_TASKBOARD_CODEX_PROFILE
   ? path.resolve(process.env.CODEX_TASKBOARD_CODEX_PROFILE)
   : "/private/tmp/codex-taskboard-independent-profile-v2";
@@ -356,7 +364,7 @@ async function launchCodexWithLaunchServices(appPath, port, shouldStop = () => f
   if (existing && managedCodexUsesPort(existing, port)) return existing;
   if (existing) await stopManagedCodex(existing);
   if (shouldStop()) throw new Error("Managed Codex launch stopped");
-  if (await isReachable(`http://127.0.0.1:${port}/json/version`)) {
+  if (await isReachable(`${cdpOrigin(port)}/json/version`)) {
     throw new Error(`Codex CDP port ${port} is already in use`);
   }
   if (shouldStop()) throw new Error("Managed Codex launch stopped");
@@ -601,7 +609,7 @@ function isExcludedCodexRoute(target) {
 }
 
 async function codexTargets(port) {
-  const targets = await fetchJson(`http://127.0.0.1:${port}/json/list`);
+  const targets = await fetchJson(`${cdpOrigin(port)}/json/list`);
   return targets.filter(isCodexTarget).map((target) => {
     return {
       ...target,
@@ -2057,14 +2065,14 @@ async function main() {
   const options = parseArgs(process.argv.slice(2));
   options.startupToken ??= taskboardInstanceToken;
   process.env.CODEX_EXECUTABLE = resolveCodexExecutable({ appPath: options.appPath });
-  const cdpVersionUrl = `http://127.0.0.1:${options.port}/json/version`;
+  const cdpVersionUrl = `${cdpOrigin(options.port)}/json/version`;
 
   if (options.daemon) {
     let port = options.port;
     if (!options.portExplicit) {
       const candidates = codexDebuggingPorts(options.port);
       const activePort = await Promise.any(candidates.map(async (candidate) => {
-        if (!(await isReachable(`http://127.0.0.1:${candidate}/json/version`))) {
+        if (!(await isReachable(`${cdpOrigin(candidate)}/json/version`))) {
           throw new Error("unreachable");
         }
         if ((await codexTargets(candidate)).length === 0) throw new Error("not Codex");
@@ -2083,7 +2091,7 @@ async function main() {
       : codexDebuggingPorts(options.port);
     const refreshed = [];
     for (const port of ports) {
-      if (!(await isReachable(`http://127.0.0.1:${port}/json/version`))) continue;
+      if (!(await isReachable(`${cdpOrigin(port)}/json/version`))) continue;
       if (options.refreshIfRunning) await restartResidentInjectorForRefresh(port);
       const results = await refreshTaskboardFrames(port);
       refreshed.push(...results.map((result) => ({ port, ...result })));

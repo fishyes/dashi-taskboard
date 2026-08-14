@@ -11,6 +11,7 @@ assert.ok(start > 0 && end > start, "codexTargets block not found in injector so
 const build = new Function(
   "fetchJson",
   "validatedLoopbackCdpWebSocketUrl",
+  "cdpOrigin",
   `${src.slice(start, end)}; return { codexTargets };`,
 );
 
@@ -56,6 +57,7 @@ async function pick(targets) {
   const { codexTargets } = build(
     async () => targets,
     (value) => value,
+    (port) => `http://localhost:${port}`,
   );
   return (await codexTargets(9229)).map((t) => t.webSocketDebuggerUrl);
 }

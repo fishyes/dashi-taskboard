@@ -16,6 +16,20 @@ test("the development TCP bridge accepts only its exact loopback page endpoint",
     ),
     "ws://127.0.0.1:9231/devtools/page/target-id",
   );
+  assert.equal(
+    validatedLoopbackCdpWebSocketUrl(
+      "ws://localhost:9231/devtools/page/target-id",
+      9231,
+    ),
+    "ws://localhost:9231/devtools/page/target-id",
+  );
+  assert.equal(
+    validatedLoopbackCdpWebSocketUrl(
+      "ws://[::1]:9231/devtools/page/target-id",
+      9231,
+    ),
+    "ws://[::1]:9231/devtools/page/target-id",
+  );
   assert.throws(
     () => validatedLoopbackCdpWebSocketUrl(
       "ws://127.0.0.1:9232/devtools/page/target-id",
