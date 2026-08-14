@@ -22,6 +22,8 @@ const baseRequest = {
   operation: "ensure-active",
   taskboardProjectId: "ppt-skill",
   codexProjectId: "codex-project-123",
+  codexProjectKind: "local",
+  codexHostId: "local",
   projectName: "PPT Skill",
   workspacePath: "/Users/example/Documents/ppt-skill",
   skillPath: "/Users/example/taskboard/skills/manage-taskboard/SKILL.md",
@@ -30,6 +32,29 @@ const baseRequest = {
   intervalMinutes: 5,
   model: "gpt-5.5",
   reasoningEffort: "high",
+};
+
+const remoteRequest = {
+  ...baseRequest,
+  codexProjectId: "remote-project-123",
+  codexProjectKind: "remote",
+  codexHostId: "remote-ssh-discovered:merlin-agent",
+  projectName: "Playground",
+  workspacePath: "/mlx_devbox/users/example/playground",
+  remoteProjects: [
+    {
+      codexProjectId: "remote-project-123",
+      codexProjectKind: "remote",
+      codexHostId: "remote-ssh-discovered:merlin-agent",
+      workspacePath: "/mlx_devbox/users/example/playground",
+    },
+    {
+      codexProjectId: "remote-worktree-456",
+      codexProjectKind: "remote",
+      codexHostId: "remote-ssh-discovered:merlin-agent",
+      workspacePath: "/mlx_devbox/users/example/playground-worktree",
+    },
+  ],
 };
 
 test("the automation model catalog matches Codex and normalizes unsupported efforts", () => {
@@ -158,6 +183,29 @@ test("the automation host request accepts only whitelisted project automation op
     parseTaskboardAutomationHostRequest({ ...baseRequest, workspacePath: "relative/path" }),
     null,
   );
+  assert.deepEqual(parseTaskboardAutomationHostRequest(remoteRequest), remoteRequest);
+  const windowsRemoteRequest = {
+    ...remoteRequest,
+    workspacePath: String.raw`C:\Users\admin\Documents\dashi-taskboard`,
+    remoteProjects: [{
+      codexProjectId: "remote-project-123",
+      codexProjectKind: "remote",
+      codexHostId: "remote-ssh-discovered:merlin-agent",
+      workspacePath: String.raw`C:\Users\admin\Documents\dashi-taskboard`,
+    }],
+  };
+  assert.deepEqual(
+    parseTaskboardAutomationHostRequest(windowsRemoteRequest),
+    windowsRemoteRequest,
+  );
+  assert.equal(
+    parseTaskboardAutomationHostRequest({ ...remoteRequest, codexHostId: "local" }),
+    null,
+  );
+  assert.equal(
+    parseTaskboardAutomationHostRequest({ ...baseRequest, codexHostId: "remote-host" }),
+    null,
+  );
 });
 
 test("the stable name and generated prompt are project-scoped and encode the claim protocol", () => {
@@ -185,6 +233,40 @@ test("the stable name and generated prompt are project-scoped and encode the cla
   assert.match(prompt, /關鍵改動、驗證結果、執行結果和剩餘風險/);
   assert.match(prompt, /in_review/);
   assert.match(prompt, /已綁定.*branch.*worktree/);
+});
+
+test("the remote automation prompt keeps taskctl local and delegates work to the SSH project", () => {
+  const prompt = buildTaskboardAutomationPrompt(remoteRequest);
+  assert.match(prompt, /僅在本機作為任務面板控制器執行/);
+  assert.match(prompt, /remote-ssh-discovered:merlin-agent/);
+  assert.match(prompt, /\/mlx_devbox\/users\/example\/playground/);
+  assert.match(prompt, /remote-worktree-456/);
+  assert.match(prompt, /\/mlx_devbox\/users\/example\/playground-worktree/);
+  assert.match(prompt, /Codex create_thread/);
+  assert.match(prompt, /projectId:actualTarget\.codexProjectId/);
+  assert.match(prompt, /同一已儲存主機目前可用的精確遠端專案對應/);
+  assert.match(prompt, /developmentContext\.type 是 worktree[\s\S]*workspacePath 與 developmentContext\.path 完全相同/);
+  assert.match(prompt, /零項或多項[\s\S]*目標 SSH worktree 未對應[\s\S]*不認領、不 create、不寫入基礎專案 binding/);
+  assert.match(prompt, /不得回退到基礎 root、local、專案名稱、其他主機/);
+  assert.match(prompt, /Codex wait_threads/);
+  assert.match(prompt, /遠端會話不執行 taskctl/);
+  assert.match(prompt, /完整 threadBinding 包含 threadId、codexProjectId、codexProjectKind、codexHostId、workspacePath/);
+  assert.match(prompt, /目前自動化的專案和主機只能作為未綁定議題的首次目標/);
+  assert.match(prompt, /存在 threadId 但沒有完整 threadBinding[\s\S]*舊版本機綁定[\s\S]*--if-version[\s\S]*不得 send、create 或覆蓋該綁定/);
+  assert.match(prompt, /所有認領、評論和狀態寫入只由目前本機控制器完成/);
+  assert.match(prompt, /已有完整 threadBinding 時，只能使用其儲存的 threadId 和 codexHostId 呼叫 Codex send_message_to_thread/);
+  assert.doesNotMatch(prompt, /要求原遠端會話按本協議判斷和認領/);
+  assert.match(prompt, /未綁定時必須傳入 --clear-binding-thread/);
+  assert.match(prompt, /記錄回應 task 的 version 為 ownedVersion[\s\S]*每次 issue move 都必須明確傳入 --if-version ownedVersion/);
+  assert.match(prompt, /create_thread 失敗[\s\S]*ownedVersion[\s\S]*--if-version[\s\S]*--clear-binding-thread[\s\S]*移回 todo/);
+  assert.match(prompt, /發生 409[\s\S]*立即停止且不得重讀最新 version 後覆蓋/);
+  assert.match(prompt, /請求回應遺失或結果不確定[\s\S]*projectId 等於 ownedProjectId[\s\S]*狀態仍為本輪 in_progress[\s\S]*threadBinding 為空或與本輪五欄位 binding 完全相同/);
+  assert.match(prompt, /讀到相同 binding 視為前次儲存成功[\s\S]*讀到不同 binding[\s\S]*立即退出/);
+  assert.match(prompt, /確定綁定寫入失敗[\s\S]*遠端 threadId[\s\S]*移動到 blocked/);
+  assert.match(prompt, /wait_threads 失敗[\s\S]*完整儲存 binding[\s\S]*移動到 blocked/);
+  assert.match(prompt, /worker 確認後的每一次 issue move 都必須明確傳入完整遠端 binding/);
+  assert.match(prompt, /不得掃描或接管其他 in_progress/);
+  assert.match(prompt, /移動到 in_review/);
 });
 
 test("the generated automation command uses an argv runtime file instead of an env assignment", () => {
@@ -229,6 +311,17 @@ test("the generated cron spec uses the selected whitelisted local Codex options"
     model: "gpt-5.4",
     reasoningEffort: "medium",
     rrule: "RRULE:FREQ=MINUTELY;INTERVAL=30",
+  });
+  assert.deepEqual(buildTaskboardAutomationSpec(remoteRequest), {
+    kind: "cron",
+    name: "Taskboard 自動認領 · ppt-skill",
+    prompt: buildTaskboardAutomationPrompt(remoteRequest),
+    projectId: null,
+    executionEnvironment: "local",
+    localEnvironmentConfigPath: null,
+    model: "gpt-5.5",
+    reasoningEffort: "high",
+    rrule: "RRULE:FREQ=MINUTELY;INTERVAL=5",
   });
 });
 

@@ -146,14 +146,14 @@ test("issues expose processing conversations without manual binding", () => {
   assert.doesNotMatch(appSource, /detail-thread-button/);
   assert.doesNotMatch(detailSource, /輸入對話 ID|解除 Codex 對話綁定|>綁定</);
   assert.doesNotMatch(editorSource, /對話 ID|linkedThreadId/);
-  assert.match(detailSource, /currentTask\.threadId/);
+  assert.match(detailSource, /currentTask\.threadBinding \|\| currentTask\.legacyLocalThreadId/);
   assert.doesNotMatch(detailSource, /currentTask\.threadIds/);
   assert.match(detailSource, /<strong>\{text\("檢視對話", "View conversation"\)\}<\/strong>/);
   assert.match(detailSource, /className="conversation-thread-id">\{threadId\}/);
   assert.doesNotMatch(detailSource, /shortThreadId/);
   assert.doesNotMatch(detailSource, /detail-property-label">Codex/);
-  assert.match(detailSource, /comment\.threadId/);
-  assert.match(detailSource, /threadId=\{comment\.threadId\}/);
+  assert.match(detailSource, /comment\.threadBinding \|\| comment\.legacyLocalThreadId/);
+  assert.match(detailSource, /onOpenLegacyLocalThread\(comment\.legacyLocalThreadId!\)/);
   assert.doesNotMatch(detailSource, /compact/);
   assert.doesNotMatch(styles, /issue-conversation-link\.compact/);
   assert.match(detailSource, /程式碼分支/);
