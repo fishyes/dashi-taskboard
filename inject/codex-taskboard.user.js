@@ -273,11 +273,13 @@
   }
 
   function findReferenceButton() {
-    const scroll = document.querySelector("[data-app-action-sidebar-scroll]");
+    const sidebarScroll = document.querySelector("[data-app-action-sidebar-scroll]");
+    const scroll = sidebarScroll || document.querySelector('aside nav[role="navigation"]');
     if (!scroll) return null;
     const buttons = Array.from(scroll.querySelectorAll("button"));
     const plugin = buttons.find((button) => buttonMatches(button, PLUGIN_LABELS));
     if (plugin && plugin.parentElement) {
+      if (!sidebarScroll) return plugin;
       let group = plugin.parentElement;
       while (group && group !== scroll) {
         if (group.querySelectorAll("button").length >= 3) return plugin;

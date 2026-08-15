@@ -45,6 +45,12 @@ const AVATAR_OVERLAY = {
   url: "app://-/index.html?initialRoute=%2Favatar-overlay",
   webSocketDebuggerUrl: "ws://127.0.0.1/5",
 };
+const AVATAR_COMPOSITION_SURFACE = {
+  type: "page",
+  title: "Codex Pet Composition Surface",
+  url: "app://-/avatar-overlay-composition-surface.html?surfaceId=mascot-badge",
+  webSocketDebuggerUrl: "ws://127.0.0.1/7",
+};
 const GLOBAL_DICTATION = {
   type: "page",
   title: "ChatGPT",
@@ -75,4 +81,11 @@ test("Windows 商店版 chatgpt.com 主頁面命中", async () => {
 
 test("快捷聊天/浮層/聽寫路由全部排除", async () => {
   assert.deepEqual(await pick([QUICK_CHAT_PREWARM, AVATAR_OVERLAY, GLOBAL_DICTATION]), []);
+});
+
+test("avatar composition surface 不得搶在主頁面前注入", async () => {
+  assert.deepEqual(
+    await pick([AVATAR_COMPOSITION_SURFACE, MAC_CODEX]),
+    [MAC_CODEX.webSocketDebuggerUrl],
+  );
 });

@@ -13,6 +13,24 @@ const webApp = await readFile(new URL("../web/src/App.tsx", import.meta.url), "u
 const webApi = await readFile(new URL("../web/src/api.ts", import.meta.url), "utf8");
 const embeddedHost = await readFile(new URL("../web/src/embeddedHost.mjs", import.meta.url), "utf8");
 
+function findReferenceButtonWith(document) {
+  const normalizedStart = source.indexOf("  function normalizedLabel");
+  const normalizedEnd = source.indexOf("\n\n  function hostLanguage", normalizedStart);
+  const finderStart = source.indexOf("  function buttonMatches");
+  const finderEnd = source.indexOf("\n\n  function replaceEntryIcon", finderStart);
+  assert.ok(normalizedStart >= 0 && normalizedEnd > normalizedStart, "normalizedLabel source not found");
+  assert.ok(finderStart >= 0 && finderEnd > finderStart, "reference button source not found");
+  const build = new Function(
+    "document",
+    `"use strict";
+      const PLUGIN_LABELS = ["外掛", "外掛程式", "插件", "plugins"];
+      ${source.slice(normalizedStart, normalizedEnd)}
+      ${source.slice(finderStart, finderEnd)}
+      return findReferenceButton;`,
+  );
+  return build(document)();
+}
+
 test("injection is an idempotent IIFE guarded by its current source hash", () => {
   assert.match(source, /^\(\(\) => \{/);
   assert.match(source, /const VERSION = "0\.6\.18"/);
@@ -44,6 +62,8 @@ test("embedded page stays inside an opaque sandbox after host verification", () 
 
 test("entry clones the native Plugins row and the page covers the complete Codex workspace", () => {
   assert.match(source, /const PLUGIN_LABELS = \["外掛", "外掛程式", "插件", "plugins"\]/);
+  assert.match(source, /document\.querySelector\('aside nav\[role="navigation"\]'\)/);
+  assert.match(source, /if \(!sidebarScroll\) return plugin;/);
   assert.match(source, /while \(group && group !== scroll\)/);
   assert.match(source, /group\.querySelectorAll\("button"\)\.length >= 3/);
   assert.match(source, /return directButtons\.length >= 3/);
@@ -59,6 +79,26 @@ test("entry clones the native Plugins row and the page covers the complete Codex
   assert.doesNotMatch(source, /codex-taskboard-overlay/);
   assert.doesNotMatch(source, /codex-taskboard-toolbar/);
   assert.doesNotMatch(source, /aria-modal/);
+});
+
+test("entry finds Plugins in the semantic navigation after sidebar data hooks disappear", () => {
+  const pluginParent = { children: [] };
+  const plugin = {
+    tagName: "BUTTON",
+    textContent: "插件",
+    getAttribute: () => null,
+    parentElement: pluginParent,
+  };
+  pluginParent.children = [plugin];
+  const navigation = {
+    querySelector: () => null,
+    querySelectorAll: (selector) => selector === "button" ? [plugin] : [],
+  };
+  const document = {
+    querySelector: (selector) => selector === 'aside nav[role="navigation"]' ? navigation : null,
+  };
+
+  assert.equal(findReferenceButtonWith(document), plugin);
 });
 
 test("opening Taskboard suppresses native selection and contextual header until close", () => {
