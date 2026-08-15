@@ -578,6 +578,7 @@ const ACTIVITY_LABELS: Record<string, readonly [string, string]> = {
   error: ["執行失敗", "Failed"],
   "turn.failed": ["執行失敗", "Failed"],
 };
+const WARNING_ACTIVITY_LABEL: readonly [string, string] = ["警告", "Warning"];
 
 const ACTIVITY_ICONS: Record<string, LinearIconName> = {
   plan: "write",
@@ -795,7 +796,9 @@ function ThinkingSteps({
             {events.map((event, index) => {
               const eventStatus = aiChatEventStatus(event);
               const detail = activityDetail(event, text);
-              const activityLabel = ACTIVITY_LABELS[event.type];
+              const activityLabel = event.type === "error" && event.data?.status === "warning"
+                ? WARNING_ACTIVITY_LABEL
+                : ACTIVITY_LABELS[event.type];
               const content = detail?.kind === "lines"
                 && (event.type === "file" || event.type === "file_change")
                 ? text(
