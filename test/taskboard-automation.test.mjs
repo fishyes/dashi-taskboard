@@ -255,6 +255,8 @@ test("the remote automation prompt keeps taskctl local and delegates work to the
   assert.match(prompt, /存在 threadId 但沒有完整 threadBinding[\s\S]*舊版本機綁定[\s\S]*--if-version[\s\S]*不得 send、create 或覆蓋該綁定/);
   assert.match(prompt, /所有認領、評論和狀態寫入只由目前本機控制器完成/);
   assert.match(prompt, /已有完整 threadBinding 時，只能使用其儲存的 threadId 和 codexHostId 呼叫 Codex send_message_to_thread/);
+  assert.match(prompt, /send 成功後必須重新執行 issue get 一次[\s\S]*status 仍為 todo[\s\S]*threadBinding 與儲存值完全相同[\s\S]*issue move --status in_progress[\s\S]*記錄回應 task\.version 為 ownedVersion/);
+  assert.match(prompt, /認領成功後繼續執行後文既有 Codex wait_threads、結果評論和 in_review 寫回路徑，不得結束本輪/);
   assert.doesNotMatch(prompt, /要求原遠端會話按本協議判斷和認領/);
   assert.match(prompt, /未綁定時必須傳入 --clear-binding-thread/);
   assert.match(prompt, /記錄回應 task 的 version 為 ownedVersion[\s\S]*每次 issue move 都必須明確傳入 --if-version ownedVersion/);
