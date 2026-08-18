@@ -362,7 +362,7 @@ test("issues start a native Codex conversation in the confirmed project with the
   );
   assert.doesNotMatch(webApp, /const prompt =/);
   assert.doesNotMatch(webApp, /skillName: "manage-taskboard"/);
-  assert.match(webApp, /instruction,/);
+  assert.match(webApp, /instruction: embeddedInstruction,/);
   assert.match(webApp, /Promise\.all\(\[getTask\(task\.id\), listComments\(task\.id\)\]\)/);
   assert.match(webApp, /moveTaskRequest\(latestTask, "in_progress", undefined, null\)/);
   assert.match(webApp, /pendingRemoteThreadClaimsRef\.current\.set/);

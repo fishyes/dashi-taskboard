@@ -3064,12 +3064,12 @@ export function App() {
         title: relation.title,
       })),
     ];
-    const beforeDescription = `${instruction}\n\n议题：${task.identifier} ${task.title}\n\n正文：\n`;
+    const beforeDescription = `${instruction}\n\n議題：${task.identifier} ${task.title}\n\n正文：\n`;
     const afterDescription = `\n\nCanonical references：\n${canonicalReferences.length > 0
       ? canonicalReferences.map((reference) => (
           `- ${reference.relation}: ${reference.identifier} ${reference.title}`
         )).join("\n")
-      : "（无）"}`;
+      : "（無）"}`;
     const embeddedInstruction = `${beforeDescription}${task.description}${afterDescription}`;
     if (localAiChatAvailable) {
       setActionError(null);

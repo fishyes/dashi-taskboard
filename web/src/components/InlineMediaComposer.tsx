@@ -849,7 +849,7 @@ function ComposerReferenceChip({
       data-taskboard-inline-media-markdown={segment.markdown}
       disabled={disabled}
       aria-label={text(
-        `${kind} ${segment.label}，按退格键或删除键移除`,
+        `${kind} ${segment.label}，按退格鍵或刪除鍵移除`,
         `${kind} ${segment.label}, press Backspace or Delete to remove`,
       )}
       onKeyDown={(event) => {

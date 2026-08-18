@@ -3155,13 +3155,13 @@ export function AiChat({
                   id="ai-chat-composer-candidates"
                   className="ai-chat-skill-menu"
                   role="listbox"
-                  aria-label={text("Composer 补全", "Composer completions")}
+                  aria-label={text("Composer 補全", "Composer completions")}
                   aria-busy={composerCandidatesLoading}
                 >
                   {composerCandidatesLoading && (
                     <div className="ai-chat-composer-candidate-state" role="status">
                       <span className="ai-chat-spinner" />
-                      {text("正在读取补全…", "Loading completions…")}
+                      {text("正在讀取補全…", "Loading completions…")}
                     </div>
                   )}
                   {!composerCandidatesLoading && composerCandidatesError && (

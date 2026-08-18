@@ -114,7 +114,7 @@ export function ComposerCompletionMenu({
       ref={menuRef}
       className="ai-chat-skill-menu issue-mention-menu composer-completion-menu"
       role="listbox"
-      aria-label={text("Composer 补全", "Composer completions")}
+      aria-label={text("Composer 補全", "Composer completions")}
       aria-busy={loading}
       style={{ position: "fixed", left: position.left, top: position.top }}
       onPointerDown={(event) => event.preventDefault()}
@@ -149,7 +149,7 @@ export function ComposerCompletionMenu({
       ))}
       {loading && (
         <p className="composer-completion-state" role="status">
-          {text("正在读取补全…", "Loading completions…")}
+          {text("正在讀取補全…", "Loading completions…")}
         </p>
       )}
       {!loading && error && (
@@ -158,10 +158,10 @@ export function ComposerCompletionMenu({
       {!loading && !error && !hasOptions && (
         <div className="composer-completion-empty" role="status">
           <p className="composer-completion-state">
-            {text("没有匹配的可选项", "No matching completions")}
+            {text("沒有匹配的可選項目", "No matching completions")}
           </p>
           {emptyDiagnostics.length > 0 && (
-            <ul className="composer-completion-diagnostics" aria-label={text("来源状态", "Source status")}>
+            <ul className="composer-completion-diagnostics" aria-label={text("來源狀態", "Source status")}>
               {emptyDiagnostics.map((diagnostic) => <li key={diagnostic}>{diagnostic}</li>)}
             </ul>
           )}
