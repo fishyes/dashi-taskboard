@@ -1013,14 +1013,17 @@
   }
 
   async function resolveNativeProject(requestedProjectId, workspacePath) {
-    if (workspacePath) {
-      return normalizeNativeRootPath(workspacePath) ? { targetRoot: workspacePath } : null;
-    }
     const context = await nativeProjectContext();
-    const project = context.projects.find((candidate) => candidate.id === requestedProjectId) ?? null;
-    const targetRoot = project?.rootPaths[0];
-    return typeof targetRoot === "string" && normalizeNativeRootPath(targetRoot)
-      ? { targetRoot }
+    const normalizedWorkspacePath = normalizeNativeRootPath(workspacePath);
+    const project = context.projects.find((candidate) => (
+      candidate.id === requestedProjectId
+      || candidate.rootPaths.some((root) => (
+        normalizeNativeRootPath(root) === normalizedWorkspacePath
+      ))
+    )) ?? null;
+    const targetRoot = normalizedWorkspacePath ? workspacePath : project?.rootPaths[0];
+    return project && typeof targetRoot === "string" && normalizeNativeRootPath(targetRoot)
+      ? { projectId: project.id, targetRoot }
       : null;
   }
 
@@ -1067,6 +1070,7 @@
     const workspacePath = typeof payload?.workspacePath === "string"
       ? payload.workspacePath.trim()
       : "";
+    const projectless = payload?.projectless === true;
     const codexProjectKind = payload?.codexProjectKind === "remote" ? "remote" : "local";
     const requestedProjectId = typeof payload?.codexProjectId === "string"
       ? payload.codexProjectId.trim()
@@ -1098,7 +1102,9 @@
       );
       let codexHostId = "local";
       let targetRoot;
-      if (codexProjectKind === "remote") {
+      if (projectless) {
+        targetRoot = "";
+      } else if (codexProjectKind === "remote") {
         codexHostId = typeof payload?.codexHostId === "string"
           ? payload.codexHostId.trim()
           : "";
@@ -1116,17 +1122,10 @@
           ));
         }
         targetRoot = target.targetRoot;
-        const switched = await requestNativeFetch("add-workspace-root-option", {
+        bridge.sendMessageFromView({
+          type: "electron-add-new-workspace-root-option",
           root: targetRoot,
-          setActive: true,
-          origin: window.location.origin,
         });
-        if (switched?.success !== true) {
-          throw new Error(hostText(
-            "Codex 未在限定時間內切換到目標專案或 worktree",
-            "Codex did not switch to the target project or worktree in time",
-          ));
-        }
         lastNativeProjectId = await waitForNativeProject(targetRoot);
       }
 
@@ -1138,12 +1137,14 @@
         state: {
           focusComposerNonce,
           prefillPrompt: instruction,
+          ...(projectless ? { project: null } : {}),
         },
       });
       const started = await requestHostTaskConversationStart({
         taskId,
         previousThreadId,
         codexHostId,
+        projectless,
         targetRoot,
         instruction,
         title,
@@ -1166,6 +1167,14 @@
       lastNativeThreadId = startedThreadId;
       postToFrame({ type: "taskboard:thread-prepared", payload: { taskId, threadId: started.threadId } });
     } catch (error) {
+      const createdThreadId = normalizeThreadId(error?.threadId);
+      if (createdThreadId && codexProjectKind !== "remote") {
+        await dispatchHostMessage({
+          type: "navigate-to-route",
+          path: routeForThread(createdThreadId),
+        });
+        lastNativeThreadId = createdThreadId;
+      }
       postToFrame({
         type: "taskboard:thread-create-error",
         payload: {
@@ -1601,6 +1610,7 @@
     taskId,
     previousThreadId,
     codexHostId,
+    projectless,
     targetRoot,
     instruction,
     title,
@@ -1609,6 +1619,7 @@
       taskId,
       previousThreadId,
       codexHostId,
+      projectless,
       targetRoot,
       instruction,
       title,

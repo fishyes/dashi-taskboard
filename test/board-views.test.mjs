@@ -40,7 +40,7 @@ test("the taskboard defaults to issues and exposes the current project views", (
   assert.match(appSource, /onClick=\{\(\) => selectBoardView\("issues"\)\}/);
   assert.match(appSource, /const SHOW_WORKFLOW_BOARD_ENTRY = false/);
   assert.match(appSource, /SHOW_WORKFLOW_BOARD_ENTRY && \([\s\S]*?>\s*\{text\("節點模式", "Workflow"\)\}\s*<\/button>/);
-  assert.match(appSource, /function changeProject[\s\S]*?setBoardView\(readProjectBoardView\(projectId\)\)/);
+  assert.match(appSource, /function changeProject[\s\S]*?setBoardView\(projectId === ALL_PROJECTS_ID \? "issues" : readProjectBoardView\(projectId\)\)/);
   assert.doesNotMatch(appSource, /<span>活躍<\/span>|<span>積壓事項<\/span>|所有議題|add-view/);
 });
 
