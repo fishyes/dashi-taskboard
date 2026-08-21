@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Gantt, type GanttStatic, type Task as GanttTask } from "dhtmlx-gantt";
-import "dhtmlx-gantt/codebase/dhtmlxgantt.css";
+import "../vendor/dhtmlxgantt.css";
 import type { Task, TaskDraft } from "../types";
 import type { TaskCardPresentation } from "../taskConversations";
 import { useTaskboardI18n } from "../i18n";
 import { LinearIcon } from "./LinearIcon";
+import { DueDateIcon } from "./SemanticIcons";
 import { taskboardIconSource } from "./TaskboardIcon";
 
 type GanttZoom = "day" | "week" | "month";
@@ -517,7 +518,7 @@ export function GanttView({ tasks, presentations, hasActiveFilters, zoom, hideCo
         </button>
         {!visibleTasks.length && (
           <div className="gantt-empty-overlay">
-            <LinearIcon name="calendar" />
+            <DueDateIcon color="currentColor" />
             <span>{hasActiveFilters || hideCompleted
               ? text("目前條件下沒有議題", "No issues match the current conditions")
               : text("建立議題後，可在這裡安排時間線", "Create an issue to schedule it on the timeline")}</span>

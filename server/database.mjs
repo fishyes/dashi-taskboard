@@ -242,7 +242,6 @@ function taskFromRow(row) {
       name: row.assignee_name,
       avatarUrl: row.assignee_avatar_url,
     },
-    workflowId: row.workflow_id,
     developmentContext,
     startDate: row.start_date,
     dueDate: row.due_date,
@@ -334,11 +333,12 @@ function projectSummaryFromRow(row) {
   };
 }
 
-function workflowWorkspaceFromRow(row) {
+function projectReadmeFromRow(row, projectId) {
   return {
-    projectId: row.project_id,
-    workspace: JSON.parse(row.workspace),
+    projectId: row.project_id ?? projectId,
+    content: row.content,
     version: row.version,
+    createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
 }
@@ -448,7 +448,6 @@ export class TaskboardDatabase {
         assignee_id TEXT NOT NULL DEFAULT 'local-user',
         assignee_name TEXT NOT NULL DEFAULT '本機使用者',
         assignee_avatar_url TEXT,
-        workflow_id TEXT,
         git_branch TEXT,
         worktree_path TEXT,
         worktree_branch TEXT,
@@ -519,10 +518,11 @@ export class TaskboardDatabase {
       CREATE INDEX IF NOT EXISTS attachments_task_created
         ON attachments(task_id, created_at, id);
 
-      CREATE TABLE IF NOT EXISTS workflow_workspaces (
+      CREATE TABLE IF NOT EXISTS project_readmes (
         project_id TEXT PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
-        workspace TEXT NOT NULL,
+        content TEXT NOT NULL DEFAULT '',
         version INTEGER NOT NULL DEFAULT 1 CHECK (version > 0),
+        created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       );
 
@@ -597,6 +597,11 @@ export class TaskboardDatabase {
     }
 
     const taskColumns = this.database.prepare("PRAGMA table_info(tasks)").all();
+    const hasWorkflowId = taskColumns.some((column) => column.name === "workflow_id");
+    if (hasWorkflowId) {
+      this.database.exec("ALTER TABLE tasks DROP COLUMN workflow_id");
+    }
+    this.database.exec("DROP TABLE IF EXISTS workflow_workspaces");
     const hasThreadId = taskColumns.some((column) => column.name === "thread_id");
     const hasLinkedThreadId = taskColumns.some((column) => column.name === "linked_thread_id");
     if (!hasThreadId) {
@@ -653,9 +658,6 @@ export class TaskboardDatabase {
     }
     if (!migratedTaskColumns.some((column) => column.name === "creator_avatar_url")) {
       this.database.exec("ALTER TABLE tasks ADD COLUMN creator_avatar_url TEXT");
-    }
-    if (!migratedTaskColumns.some((column) => column.name === "workflow_id")) {
-      this.database.exec("ALTER TABLE tasks ADD COLUMN workflow_id TEXT");
     }
     if (!migratedTaskColumns.some((column) => column.name === "external_source")) {
       this.database.exec("ALTER TABLE tasks ADD COLUMN external_source TEXT");
@@ -747,6 +749,7 @@ export class TaskboardDatabase {
         relation_type TEXT NOT NULL CHECK (relation_type IN ('parent', 'blocks', 'related')),
         source_task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
         target_task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+        origin TEXT NOT NULL DEFAULT 'manual' CHECK (origin IN ('manual', 'mention')),
         created_at TEXT NOT NULL,
         CHECK (source_task_id <> target_task_id),
         CHECK (relation_type <> 'related' OR source_task_id < target_task_id),
@@ -760,6 +763,15 @@ export class TaskboardDatabase {
         ON task_relations(target_task_id)
         WHERE relation_type = 'parent';
     `);
+
+    const taskRelationColumns = this.database.prepare("PRAGMA table_info(task_relations)").all();
+    if (!taskRelationColumns.some((column) => column.name === "origin")) {
+      this.database.exec(`
+        ALTER TABLE task_relations
+        ADD COLUMN origin TEXT NOT NULL DEFAULT 'manual'
+          CHECK (origin IN ('manual', 'mention'))
+      `);
+    }
 
     const commentColumns = this.database.prepare("PRAGMA table_info(comments)").all();
     if (!commentColumns.some((column) => column.name === "thread_id")) {
@@ -1066,7 +1078,7 @@ export class TaskboardDatabase {
           thread_codex_host_id, thread_workspace_path,
           creator_type, creator_id, creator_name, creator_avatar_url,
           assignee_type, assignee_id, assignee_name, assignee_avatar_url,
-          workflow_id, git_branch, worktree_path, worktree_branch,
+          git_branch, worktree_path, worktree_branch,
           start_date, due_date, recurrence_interval, recurrence_unit,
           external_source, external_origin, external_id, external_key, external_url,
           archived_at, version, created_at, updated_at
@@ -1075,7 +1087,7 @@ export class TaskboardDatabase {
           ?, NULL, NULL, NULL, NULL, NULL,
           ?, ?, ?, ?,
           ?, ?, ?, ?,
-          NULL, NULL, NULL, NULL,
+          NULL, NULL, NULL,
           NULL, ?, NULL, NULL,
           'jira', ?, ?, ?, ?,
           NULL, 1, ?, ?
@@ -1351,21 +1363,21 @@ export class TaskboardDatabase {
     return this.getProjectSummary(projectId);
   }
 
-  getWorkflowWorkspace(projectId) {
+  getProjectReadme(projectId) {
     if (!this.database.prepare("SELECT 1 FROM projects WHERE id = ?").get(projectId)) {
       throw new ApiError(404, "PROJECT_NOT_FOUND", `Project '${projectId}' does not exist`);
     }
     const row = this.database.prepare(`
-      SELECT project_id, workspace, version, updated_at
-      FROM workflow_workspaces
+      SELECT project_id, content, version, created_at, updated_at
+      FROM project_readmes
       WHERE project_id = ?
     `).get(projectId);
     return row
-      ? workflowWorkspaceFromRow(row)
-      : { projectId, workspace: null, version: 0, updatedAt: null };
+      ? projectReadmeFromRow(row, projectId)
+      : { projectId, content: "", version: 0, createdAt: null, updatedAt: null };
   }
 
-  saveWorkflowWorkspace(projectId, expectedVersion, workspace) {
+  saveProjectReadme(projectId, content, expectedVersion) {
     const timestamp = now();
     this.database.exec("BEGIN IMMEDIATE");
     try {
@@ -1373,33 +1385,39 @@ export class TaskboardDatabase {
         throw new ApiError(404, "PROJECT_NOT_FOUND", `Project '${projectId}' does not exist`);
       }
       const current = this.database.prepare(`
-        SELECT version FROM workflow_workspaces WHERE project_id = ?
+        SELECT version FROM project_readmes WHERE project_id = ?
       `).get(projectId);
-      const actualVersion = current?.version ?? 0;
-      if (actualVersion !== expectedVersion) {
-        throw new ApiError(409, "VERSION_CONFLICT", "Workflow was changed by another client", {
-          expectedVersion,
-          actualVersion,
-        });
+      if (expectedVersion !== undefined) {
+        const actualVersion = current?.version ?? 0;
+        if (actualVersion !== expectedVersion) {
+          throw new ApiError(409, "VERSION_CONFLICT", "Project README changed since it was last read", {
+            expectedVersion,
+            actualVersion,
+          });
+        }
       }
       if (current) {
+        const versionCondition = expectedVersion !== undefined ? " AND version = ?" : "";
+        const params = expectedVersion !== undefined
+          ? [content, timestamp, projectId, expectedVersion]
+          : [content, timestamp, projectId];
         this.database.prepare(`
-          UPDATE workflow_workspaces
-          SET workspace = ?, version = version + 1, updated_at = ?
-          WHERE project_id = ? AND version = ?
-        `).run(JSON.stringify(workspace), timestamp, projectId, expectedVersion);
+          UPDATE project_readmes
+          SET content = ?, version = version + 1, updated_at = ?
+          WHERE project_id = ?${versionCondition}
+        `).run(...params);
       } else {
         this.database.prepare(`
-          INSERT INTO workflow_workspaces (project_id, workspace, version, updated_at)
-          VALUES (?, ?, 1, ?)
-        `).run(projectId, JSON.stringify(workspace), timestamp);
+          INSERT INTO project_readmes (project_id, content, version, created_at, updated_at)
+          VALUES (?, ?, 1, ?, ?)
+        `).run(projectId, content, timestamp, timestamp);
       }
       this.database.exec("COMMIT");
     } catch (error) {
       this.database.exec("ROLLBACK");
       throw error;
     }
-    return this.getWorkflowWorkspace(projectId);
+    return this.getProjectReadme(projectId);
   }
 
   listAiChatThreads() {
@@ -1791,10 +1809,10 @@ export class TaskboardDatabase {
           thread_codex_host_id, thread_workspace_path,
           creator_type, creator_id, creator_name, creator_avatar_url,
           assignee_type, assignee_id, assignee_name, assignee_avatar_url,
-          workflow_id, git_branch, worktree_path, worktree_branch,
+          git_branch, worktree_path, worktree_branch,
           start_date, due_date, recurrence_interval, recurrence_unit,
           archived_at, version, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 1, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 1, ?, ?)
       `).run(
         id,
         identifier,
@@ -1814,7 +1832,6 @@ export class TaskboardDatabase {
         input.assignee.id,
         input.assignee.name,
         input.assignee.avatarUrl,
-        input.workflowId,
         input.developmentContext?.type === "branch" ? input.developmentContext.branch : null,
         input.developmentContext?.type === "worktree" ? input.developmentContext.path : null,
         input.developmentContext?.type === "worktree" ? input.developmentContext.branch : null,
@@ -1879,7 +1896,6 @@ export class TaskboardDatabase {
       status: "status",
       priority: "priority",
       labels: "labels",
-      workflowId: "workflow_id",
       startDate: "start_date",
       dueDate: "due_date",
     };
@@ -2116,7 +2132,7 @@ export class TaskboardDatabase {
     }
   }
 
-  addTaskRelation(id, version, type, relatedId, threadId, threadBinding, actor) {
+  addTaskRelation(id, version, type, relatedId, threadId, threadBinding, actor, origin = "manual") {
     this.database.exec("BEGIN IMMEDIATE");
     try {
       const task = this.#requireTask(id);
@@ -2162,9 +2178,9 @@ export class TaskboardDatabase {
         : null;
       this.database.prepare(`
         INSERT INTO task_relations (
-          relation_type, source_task_id, target_task_id, created_at
-        ) VALUES (?, ?, ?, ?)
-      `).run(relationType, sourceTaskId, targetTaskId, timestamp);
+          relation_type, source_task_id, target_task_id, origin, created_at
+        ) VALUES (?, ?, ?, ?, ?)
+      `).run(relationType, sourceTaskId, targetTaskId, origin, timestamp);
       this.#touchTask(task.id, version, threadId, threadBinding, timestamp);
       this.#recordTaskActivity(task.id, actor, [{
         field: "relation",
@@ -2182,7 +2198,7 @@ export class TaskboardDatabase {
     }
   }
 
-  removeTaskRelation(id, version, type, relatedId, threadId, threadBinding, actor) {
+  removeTaskRelation(id, version, type, relatedId, threadId, threadBinding, actor, origin) {
     this.database.exec("BEGIN IMMEDIATE");
     try {
       const task = this.#requireTask(id);
@@ -2194,12 +2210,72 @@ export class TaskboardDatabase {
         task.id,
         relatedTask.id,
       );
-      const removed = this.database.prepare(`
-        DELETE FROM task_relations
+      const relation = this.database.prepare(`
+        SELECT origin
+        FROM task_relations
         WHERE relation_type = ? AND source_task_id = ? AND target_task_id = ?
-      `).run(relationType, sourceTaskId, targetTaskId);
-      if (removed.changes !== 1) {
+      `).get(relationType, sourceTaskId, targetTaskId);
+      if (!relation) {
         throw new ApiError(404, "RELATION_NOT_FOUND", "This issue relation does not exist");
+      }
+      if (origin && relation.origin !== origin) {
+        this.database.exec("COMMIT");
+        return {
+          task: this.getTask(task.id),
+          relatedTask: this.getTask(relatedTask.id),
+        };
+      }
+      let deleted;
+      if (origin === "mention" && relationType === "related") {
+        const taskReference = `](?${new URLSearchParams({
+          project: task.projectId,
+          issue: relatedTask.identifier,
+        })})`;
+        const relatedTaskReference = `](?${new URLSearchParams({
+          project: task.projectId,
+          issue: task.identifier,
+        })})`;
+        deleted = this.database.prepare(`
+          DELETE FROM task_relations
+          WHERE relation_type = ? AND source_task_id = ? AND target_task_id = ?
+            AND origin = 'mention'
+            AND NOT EXISTS (
+              SELECT 1
+              FROM tasks
+              WHERE (id = ? AND instr(description, ?) > 0)
+                OR (id = ? AND instr(description, ?) > 0)
+            )
+            AND NOT EXISTS (
+              SELECT 1
+              FROM comments
+              WHERE (task_id = ? AND instr(body, ?) > 0)
+                OR (task_id = ? AND instr(body, ?) > 0)
+            )
+        `).run(
+          relationType,
+          sourceTaskId,
+          targetTaskId,
+          task.id,
+          taskReference,
+          relatedTask.id,
+          relatedTaskReference,
+          task.id,
+          taskReference,
+          relatedTask.id,
+          relatedTaskReference,
+        );
+      } else {
+        deleted = this.database.prepare(`
+          DELETE FROM task_relations
+          WHERE relation_type = ? AND source_task_id = ? AND target_task_id = ?
+        `).run(relationType, sourceTaskId, targetTaskId);
+      }
+      if (origin === "mention" && relationType === "related" && deleted.changes === 0) {
+        this.database.exec("COMMIT");
+        return {
+          task: this.getTask(task.id),
+          relatedTask: this.getTask(relatedTask.id),
+        };
       }
       const timestamp = now();
       this.#touchTask(task.id, version, threadId, threadBinding, timestamp);
@@ -2430,15 +2506,7 @@ export class TaskboardDatabase {
         WHERE attachments.task_id IN (${placeholders})
           AND attachments.comment_id IS NULL
           AND attachments.content_type LIKE 'image/%'
-          AND (
-            attachments.kind = 'attachment'
-            OR instr(tasks.description, 'api/attachments/' || attachments.id || '/content') > 0
-            OR EXISTS (
-              SELECT 1 FROM comments
-              WHERE comments.task_id = attachments.task_id
-                AND instr(comments.body, 'api/attachments/' || attachments.id || '/content') > 0
-            )
-          )
+          AND instr(tasks.description, 'api/attachments/' || attachments.id || '/content') > 0
         ORDER BY attachments.task_id, attachments.created_at, attachments.id
       `).all(...chunk);
       for (const row of rows) {

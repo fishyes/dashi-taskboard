@@ -1,5 +1,5 @@
 import { createHmac, randomUUID } from "node:crypto";
-import { execFile, spawn } from "node:child_process";
+import { execFile } from "node:child_process";
 import { chmod, mkdir, open, readFile, readdir, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { isIP } from "node:net";
@@ -18,8 +18,6 @@ import {
 } from "../shared/domain.mjs";
 import { resolveCodexExecutable } from "../shared/codex-executable.mjs";
 import { withoutTaskboardLauncherEnvironment } from "../shared/codex-environment.mjs";
-import { executableCommand } from "../shared/executable-command.mjs";
-import { normalizeWorkflowSnapshot } from "../shared/workflow-control-flow.mjs";
 import { AiChatService } from "./ai-chat.mjs";
 import { resolveAiWorkspace, resolveMappedAiWorkspace } from "./ai-chat-catalog.mjs";
 import { decodeComposerReferenceKey } from "./composer-reference.mjs";
@@ -37,6 +35,7 @@ import { ProjectSummaryService } from "./project-summary.mjs";
 const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const execFileAsync = promisify(execFile);
 const JSON_BODY_LIMIT = 1024 * 1024;
+const PROJECT_README_BODY_LIMIT = 3 * 1024 * 1024;
 const ATTACHMENT_BODY_LIMIT = 25 * 1024 * 1024;
 const AI_CHAT_TURN_BODY_LIMIT = 25 * 1024 * 1024;
 const AI_CHAT_ATTACHMENT_LIMIT = 10;
@@ -149,6 +148,7 @@ function isTrustedNetworkHost(hostname) {
     const octets = host.split(".").map(Number);
     return octets[0] === 127
       || octets[0] === 10
+      || (octets[0] === 100 && octets[1] >= 64 && octets[1] <= 127)
       || (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31)
       || (octets[0] === 192 && octets[1] === 168)
       || (octets[0] === 169 && octets[1] === 254);
@@ -342,87 +342,6 @@ function parseVersion(value) {
   return value;
 }
 
-function parseWorkflowVersion(value) {
-  if (!Number.isSafeInteger(value) || value < 0) {
-    throw new ApiError(400, "INVALID_FIELD", "'version' must be a non-negative integer");
-  }
-  return value;
-}
-
-function parseWorkflowWorkspace(value) {
-  assertPlainObject(value);
-  assertAllowedKeys(value, new Set(["version", "tabs", "activeWorkflowId", "snapshots"]));
-  if (value.version !== 1) {
-    throw new ApiError(400, "INVALID_FIELD", "'workspace.version' must be 1");
-  }
-  if (!Array.isArray(value.tabs) || value.tabs.length === 0 || value.tabs.length > 100) {
-    throw new ApiError(400, "INVALID_FIELD", "'workspace.tabs' must contain 1 to 100 workflows");
-  }
-  const tabs = value.tabs.map((tab, index) => {
-    assertPlainObject(tab);
-    assertAllowedKeys(tab, new Set(["id", "name"]));
-    return {
-      id: stringField(tab.id, `workspace.tabs[${index}].id`, { required: true, maxLength: 128 }),
-      name: stringField(tab.name, `workspace.tabs[${index}].name`, { required: true, maxLength: 120 }),
-    };
-  });
-  if (new Set(tabs.map((tab) => tab.id)).size !== tabs.length) {
-    throw new ApiError(400, "INVALID_FIELD", "'workspace.tabs' ids must be unique");
-  }
-  const activeWorkflowId = stringField(value.activeWorkflowId, "workspace.activeWorkflowId", {
-    required: true,
-    maxLength: 128,
-  });
-  if (!tabs.some((tab) => tab.id === activeWorkflowId)) {
-    throw new ApiError(400, "INVALID_FIELD", "'workspace.activeWorkflowId' must reference a workflow tab");
-  }
-  assertPlainObject(value.snapshots);
-  const snapshots = {};
-  for (const tab of tabs) {
-    const snapshot = value.snapshots[tab.id];
-    assertPlainObject(snapshot);
-    assertAllowedKeys(snapshot, new Set(["nodes", "edges", "flow", "selectedNodeId"]));
-    if (!Array.isArray(snapshot.nodes) || snapshot.nodes.length > 10_000) {
-      throw new ApiError(400, "INVALID_FIELD", `'workspace.snapshots.${tab.id}.nodes' must be an array`);
-    }
-    if (snapshot.flow === undefined && (!Array.isArray(snapshot.edges) || snapshot.edges.length > 20_000)) {
-      throw new ApiError(400, "INVALID_FIELD", `'workspace.snapshots.${tab.id}.edges' must be an array`);
-    }
-    if (snapshot.flow !== undefined && snapshot.edges !== undefined) {
-      throw new ApiError(400, "INVALID_FIELD", `'workspace.snapshots.${tab.id}' cannot contain both 'flow' and 'edges'`);
-    }
-    const selectedNodeId = stringField(
-      snapshot.selectedNodeId ?? null,
-      `workspace.snapshots.${tab.id}.selectedNodeId`,
-      { nullable: true, maxLength: 256 },
-    );
-    try {
-      snapshots[tab.id] = normalizeWorkflowSnapshot({
-        nodes: snapshot.nodes,
-        edges: snapshot.edges,
-        flow: snapshot.flow,
-        selectedNodeId,
-      });
-    } catch (error) {
-      throw new ApiError(
-        400,
-        "INVALID_FIELD",
-        `'workspace.snapshots.${tab.id}' is not a valid workflow: ${error.message}`,
-      );
-    }
-  }
-  return { version: 1, tabs, activeWorkflowId, snapshots };
-}
-
-function parseWorkflowWorkspaceSave(body) {
-  assertPlainObject(body);
-  assertAllowedKeys(body, new Set(["version", "workspace"]));
-  return {
-    version: parseWorkflowVersion(body.version),
-    workspace: parseWorkflowWorkspace(body.workspace),
-  };
-}
-
 function parseSortOrder(value) {
   if (typeof value !== "number" || !Number.isFinite(value) || Math.abs(value) > 1_000_000_000_000) {
     throw new ApiError(400, "INVALID_FIELD", "'sortOrder' must be a finite number between -1000000000000 and 1000000000000");
@@ -500,6 +419,23 @@ function parseProjectLabel(body) {
   assertPlainObject(body);
   assertAllowedKeys(body, new Set(["label"]));
   return stringField(body.label, "label", { required: true, maxLength: 64 });
+}
+
+function parseProjectReadmeSave(body) {
+  assertPlainObject(body);
+  assertAllowedKeys(body, new Set(["content", "version"]));
+  const content = body.content ?? "";
+  if (typeof content !== "string") {
+    throw new ApiError(400, "INVALID_FIELD", "'content' must be a string");
+  }
+  if (content.length > 500_000) {
+    throw new ApiError(400, "INVALID_FIELD", "'content' cannot exceed 500000 characters");
+  }
+  const version = body.version;
+  if (version !== undefined && (!Number.isSafeInteger(version) || version < 0)) {
+    throw new ApiError(400, "INVALID_FIELD", "'version' must be a non-negative integer");
+  }
+  return { content, version };
 }
 
 function parseThreadId(value) {
@@ -623,19 +559,11 @@ function resolveAssignee(target, actor) {
   return actor;
 }
 
-function parseWorkflowId(value) {
-  const workflowId = stringField(value, "workflowId", { nullable: true, maxLength: 128 });
-  if (workflowId === "") {
-    throw new ApiError(400, "INVALID_FIELD", "'workflowId' cannot be empty");
-  }
-  return workflowId;
-}
-
 function parseTaskCreate(body) {
   assertPlainObject(body);
   assertAllowedKeys(body, new Set([
     "projectId", "title", "description", "status", "priority", "labels", "sortOrder", "threadId", "threadBinding",
-    "assigneeTarget", "workflowId", "developmentContext", "startDate", "dueDate", "recurrence",
+    "assigneeTarget", "developmentContext", "startDate", "dueDate", "recurrence",
   ]));
   const projectId = validateProjectId(body.projectId ?? DEFAULT_PROJECT_ID);
   const task = {
@@ -649,7 +577,6 @@ function parseTaskCreate(body) {
     threadId: parseThreadId(body.threadId),
     threadBinding: parseThreadBinding(body.threadBinding),
     assigneeTarget: parseAssigneeTarget(body.assigneeTarget),
-    workflowId: parseWorkflowId(body.workflowId ?? null),
     developmentContext: parseDevelopmentContext(body.developmentContext ?? null),
     startDate: parseDueDate(body.startDate ?? null, "startDate"),
     dueDate: parseDueDate(body.dueDate ?? null),
@@ -665,7 +592,7 @@ function parseTaskPatch(body) {
   assertPlainObject(body);
   assertAllowedKeys(body, new Set([
     "version", "projectId", "title", "description", "status", "priority", "labels", "threadId", "threadBinding",
-    "assigneeTarget", "workflowId", "developmentContext", "startDate", "dueDate", "recurrence",
+    "assigneeTarget", "developmentContext", "startDate", "dueDate", "recurrence",
   ]));
   const version = parseVersion(body.version);
   const threadId = parseThreadId(body.threadId);
@@ -678,7 +605,6 @@ function parseTaskPatch(body) {
   if (body.status !== undefined) changes.status = parseStatus(body.status);
   if (body.priority !== undefined) changes.priority = parsePriority(body.priority);
   if (body.labels !== undefined) changes.labels = parseLabels(body.labels);
-  if (body.workflowId !== undefined) changes.workflowId = parseWorkflowId(body.workflowId);
   if (body.developmentContext !== undefined) changes.developmentContext = parseDevelopmentContext(body.developmentContext);
   if (body.startDate !== undefined) changes.startDate = parseDueDate(body.startDate, "startDate");
   if (body.dueDate !== undefined) changes.dueDate = parseDueDate(body.dueDate);
@@ -711,6 +637,25 @@ function parseArchive(body) {
     version: parseVersion(body.version),
     threadId: parseThreadId(body.threadId),
     threadBinding: parseThreadBinding(body.threadBinding),
+  };
+}
+
+function parseRelationOrigin(value) {
+  if (value === undefined) return undefined;
+  if (value !== "manual" && value !== "mention") {
+    throw new ApiError(400, "INVALID_FIELD", "'origin' must be manual or mention");
+  }
+  return value;
+}
+
+function parseRelationMutation(body) {
+  assertPlainObject(body);
+  assertAllowedKeys(body, new Set(["version", "threadId", "threadBinding", "origin"]));
+  return {
+    version: parseVersion(body.version),
+    threadId: parseThreadId(body.threadId),
+    threadBinding: parseThreadBinding(body.threadBinding),
+    origin: parseRelationOrigin(body.origin),
   };
 }
 
@@ -1551,157 +1496,6 @@ async function scanDevelopmentContexts(workspacePath, processEnv = process.env) 
   }
 }
 
-async function discoverSkills(codexExecutable, workspacePath, processEnv) {
-  const entries = await new Promise((resolve, reject) => {
-    const command = executableCommand(codexExecutable, ["app-server", "--stdio"]);
-    const child = spawn(command.executable, command.args, {
-      cwd: workspacePath,
-      env: processEnv,
-      stdio: ["pipe", "pipe", "ignore"],
-    });
-    let settled = false;
-    let buffer = "";
-    const timeout = setTimeout(() => {
-      finish(new Error("Timed out while reading Codex skills"));
-    }, 10_000);
-
-    function finish(error, value) {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      child.stdin.end();
-      child.kill("SIGTERM");
-      if (error) reject(error);
-      else resolve(value);
-    }
-
-    function send(message) {
-      child.stdin.write(`${JSON.stringify(message)}\n`);
-    }
-
-    function handleMessage(message) {
-      if (message?.id === 1) {
-        if (message.error) {
-          finish(new Error("Codex app-server rejected initialization"));
-          return;
-        }
-        send({ method: "initialized" });
-        send({
-          id: 2,
-          method: "skills/list",
-          params: { cwds: [workspacePath], forceReload: false },
-        });
-        return;
-      }
-      if (message?.id !== 2) return;
-      if (message.error) {
-        finish(new Error("Codex app-server could not list skills"));
-        return;
-      }
-      finish(null, Array.isArray(message.result?.data) ? message.result.data : []);
-    }
-
-    child.stdout.setEncoding("utf8");
-    child.stdout.on("data", (chunk) => {
-      buffer += chunk;
-      let newlineIndex = buffer.indexOf("\n");
-      while (newlineIndex >= 0) {
-        const line = buffer.slice(0, newlineIndex).trim();
-        buffer = buffer.slice(newlineIndex + 1);
-        if (line) {
-          try {
-            handleMessage(JSON.parse(line));
-          } catch {}
-        }
-        newlineIndex = buffer.indexOf("\n");
-      }
-    });
-    child.stdin.on("error", (error) => finish(error));
-    child.once("error", (error) => finish(error));
-    child.once("exit", (code, signal) => {
-      if (!settled) {
-        finish(new Error(`Codex app-server exited before listing skills (${signal || code})`));
-      }
-    });
-    child.once("spawn", () => {
-      send({
-        id: 1,
-        method: "initialize",
-        params: {
-          clientInfo: { name: "codex-taskboard", version: "0.1.0" },
-          capabilities: { experimentalApi: true },
-        },
-      });
-    });
-  });
-
-  const unique = new Map();
-  for (const entry of entries) {
-    if (!Array.isArray(entry?.skills)) continue;
-    for (const skill of entry.skills) {
-      if (
-        !skill
-        || typeof skill !== "object"
-        || skill.enabled === false
-        || typeof skill.name !== "string"
-        || !skill.name.trim()
-      ) {
-        continue;
-      }
-      const id = skill.name.trim();
-      if (unique.has(id)) continue;
-      const displayName = typeof skill.interface?.displayName === "string"
-        ? skill.interface.displayName.trim()
-        : "";
-      unique.set(id, {
-        id,
-        label: displayName || id,
-        description: typeof skill.description === "string" ? skill.description.trim() : "",
-        path: typeof skill.path === "string" ? skill.path.trim() : "",
-        scope: ["user", "repo", "system", "admin"].includes(skill.scope)
-          ? skill.scope
-          : "user",
-      });
-    }
-  }
-  return [...unique.values()].sort((left, right) => left.label.localeCompare(right.label));
-}
-
-async function discoverMcpServers(codexExecutable, processEnv) {
-  const command = executableCommand(codexExecutable, ["mcp", "list", "--json"]);
-  const result = await execFileAsync(command.executable, command.args, {
-    env: processEnv,
-    timeout: 8_000,
-    maxBuffer: 2 * 1024 * 1024,
-  });
-  const entries = JSON.parse(result.stdout);
-  if (!Array.isArray(entries)) throw new Error("Codex returned an invalid MCP server list");
-  return entries
-    .filter((entry) => (
-      entry
-      && typeof entry === "object"
-      && typeof entry.name === "string"
-      && entry.name.trim()
-      && entry.enabled !== false
-    ))
-    .map((entry) => ({
-      id: entry.name.trim(),
-      label: entry.name.trim(),
-      transport: typeof entry.transport?.type === "string"
-        ? entry.transport.type
-        : "unknown",
-    }))
-    .sort((left, right) => left.label.localeCompare(right.label));
-}
-
-async function discoverWorkflowCapabilities(resolved, workspacePath, processEnv) {
-  const [skills, mcpServers] = await Promise.all([
-    discoverSkills(resolved.codexExecutable, workspacePath, processEnv),
-    discoverMcpServers(resolved.codexExecutable, processEnv),
-  ]);
-  return { skills, mcpServers };
-}
-
 export function resolveServerOptions(options = {}) {
   const configuredDataDirectory = options.dataDirectory ?? process.env.CODEX_TASKBOARD_DATA_DIR;
   const dataDirectory = configuredDataDirectory
@@ -2139,7 +1933,6 @@ export function createTaskboardServer(options = {}) {
       }
       const isMachineCapabilityRoute = pathname === "/api/meta"
         || pathname === "/api/device-workspaces"
-        || pathname === "/api/workflow-capabilities"
         || /^\/api\/projects\/[^/]+\/development-contexts$/.test(pathname);
       const capabilityCloudConfig = isMachineCapabilityRoute
         ? await cloudConfig.read()
@@ -2546,33 +2339,6 @@ export function createTaskboardServer(options = {}) {
         });
       }
 
-      if (pathname === "/api/workflow-capabilities") {
-        if (request.method !== "GET") return methodNotAllowed(response, ["GET"]);
-        const unknownQuery = [...url.searchParams.keys()].filter((key) => key !== "workspacePath");
-        if (unknownQuery.length > 0) {
-          throw new ApiError(400, "UNKNOWN_QUERY_PARAMETER", `Unknown query parameter: ${unknownQuery[0]}`);
-        }
-        const workspacePath = stringField(
-          url.searchParams.get("workspacePath") ?? null,
-          "workspacePath",
-          { nullable: true, maxLength: 4096 },
-        );
-        if (workspacePath?.includes("\0")) {
-          throw new ApiError(400, "INVALID_FIELD", "'workspacePath' cannot contain null bytes");
-        }
-        if (workspacePath && !path.isAbsolute(workspacePath)) {
-          throw new ApiError(400, "INVALID_FIELD", "'workspacePath' must be absolute");
-        }
-        return sendJson(
-          response,
-          200,
-          await discoverWorkflowCapabilities(
-            resolved,
-            workspacePath ?? PROJECT_ROOT,
-            codexProcessEnvironment,
-          ),
-        );
-      }
 
       let currentCloudConfig = null;
       if (pathname.startsWith("/api/")) {
@@ -2658,29 +2424,33 @@ export function createTaskboardServer(options = {}) {
         return sendJson(response, 200, { project });
       }
 
-      const workflowWorkspaceRoute = pathname.match(/^\/api\/projects\/([^/]+)\/workflow-workspace$/);
-      if (workflowWorkspaceRoute) {
+      const projectReadmeRoute = pathname.match(/^\/api\/projects\/([^/]+)\/readme$/);
+      if (projectReadmeRoute) {
         if ([...url.searchParams.keys()].length > 0) {
-          throw new ApiError(400, "UNKNOWN_QUERY_PARAMETER", "Workflow workspace routes do not accept query parameters");
+          throw new ApiError(400, "UNKNOWN_QUERY_PARAMETER", "Project README routes do not accept query parameters");
         }
         let projectId;
         try {
-          projectId = decodeURIComponent(workflowWorkspaceRoute[1]);
+          projectId = decodeURIComponent(projectReadmeRoute[1]);
         } catch {
           throw new ApiError(400, "INVALID_PATH", "Project id contains invalid encoding");
         }
         validateProjectId(projectId);
         if (request.method === "GET") {
-          return sendJson(response, 200, { workflow: database.getWorkflowWorkspace(projectId) });
+          return sendJson(response, 200, { readme: database.getProjectReadme(projectId) });
         }
         if (request.method === "PUT") {
-          const input = parseWorkflowWorkspaceSave(await readJson(request));
-          const workflow = database.saveWorkflowWorkspace(projectId, input.version, input.workspace);
-          events.emit("workflow.updated", {
+          const input = parseProjectReadmeSave(await readJson(
+            request,
+            PROJECT_README_BODY_LIMIT,
+            "Project README request cannot exceed 3 MiB",
+          ));
+          const readme = database.saveProjectReadme(projectId, input.content, input.version);
+          events.emit("project.readme.updated", {
             projectId,
-            workflowVersion: workflow.version,
+            readmeVersion: readme.version,
           });
-          return sendJson(response, 200, { workflow });
+          return sendJson(response, 200, { readme });
         }
         return methodNotAllowed(response, ["GET", "PUT"]);
       }
@@ -2804,8 +2574,8 @@ export function createTaskboardServer(options = {}) {
         }
         const relationType = parseIssueRelationType(type);
         if (request.method === "POST") {
-          const { version, threadId, threadBinding } = resolveInputThreadBinding(
-            parseArchive(await readJson(request)),
+          const { version, threadId, threadBinding, origin } = resolveInputThreadBinding(
+            parseRelationMutation(await readJson(request)),
           );
           const result = database.addTaskRelation(
             taskId,
@@ -2815,13 +2585,14 @@ export function createTaskboardServer(options = {}) {
             threadId,
             threadBinding,
             actorFromRequest(request),
+            origin,
           );
           events.emit("task.relation.updated", result);
           return sendJson(response, 200, result);
         }
         if (request.method === "DELETE") {
-          const { version, threadId, threadBinding } = resolveInputThreadBinding(
-            parseArchive(await readJson(request)),
+          const { version, threadId, threadBinding, origin } = resolveInputThreadBinding(
+            parseRelationMutation(await readJson(request)),
           );
           const result = database.removeTaskRelation(
             taskId,
@@ -2831,6 +2602,7 @@ export function createTaskboardServer(options = {}) {
             threadId,
             threadBinding,
             actorFromRequest(request),
+            origin,
           );
           events.emit("task.relation.updated", result);
           return sendJson(response, 200, result);
