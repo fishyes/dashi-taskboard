@@ -314,6 +314,35 @@ function codexExecutablePath(appPath) {
 }
 
 function codexAppProcesses(appPath) {
+  if (process.platform === "win32") {
+    const script = [
+      "$ErrorActionPreference = 'Stop';",
+      "Get-CimInstance Win32_Process -Filter \"Name='ChatGPT.exe' OR Name='Codex.exe'\"",
+      "| Where-Object { $_.CommandLine -and $_.CommandLine -notlike '* --type=*' }",
+      "| ForEach-Object { [PSCustomObject]@{ pid = [int]$_.ProcessId; command = [string]$_.CommandLine } }",
+      "| ConvertTo-Json -Compress",
+    ].join(" ");
+    const processes = spawnSync(
+      "powershell.exe",
+      ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script],
+      {
+        encoding: "utf8",
+        env: withoutTaskboardLauncherEnvironment(process.env),
+        maxBuffer: 4 * 1024 * 1024,
+      },
+    );
+    if (processes.status !== 0) {
+      throw new Error("Unable to inspect the launched Codex process");
+    }
+    const output = processes.stdout.trim();
+    if (!output) return [];
+    const records = JSON.parse(output);
+    return (Array.isArray(records) ? records : [records]).map((record) => ({
+      pid: Number(record.pid),
+      command: record.command,
+    }));
+  }
+
   const processes = spawnSync("/bin/ps", ["-ww", "-axo", "pid=,command="], {
     encoding: "utf8",
     env: withoutTaskboardLauncherEnvironment(process.env),
