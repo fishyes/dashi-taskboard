@@ -77,7 +77,6 @@ import {
   DeleteIcon,
   MoreIcon,
   PlusIcon,
-  ProjectIcon,
   RefreshIcon,
   RelationIcon,
 } from "./components/SemanticIcons";
@@ -391,10 +390,17 @@ function isTheme(value: unknown): value is Theme {
 }
 
 function getInitialTheme(): Theme {
-  const fromQuery = new URLSearchParams(window.location.search).get("theme");
-  if (isTheme(fromQuery)) return fromQuery;
-  const stored = taskboardStorage.getItem("taskboard.theme");
-  if (isTheme(stored)) return stored;
+  const query = new URL(document.baseURI).searchParams;
+  const host = query.get("host");
+  if (
+    window.parent !== window
+    && (host === "codex" || host === "workbuddy" || host === "deepseek-harness")
+  ) {
+    const fromQuery = query.get("theme");
+    if (isTheme(fromQuery)) return fromQuery;
+    const stored = taskboardStorage.getItem("taskboard.theme");
+    if (isTheme(stored)) return stored;
+  }
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
@@ -598,10 +604,7 @@ function LocalRealtimeSync({
         try {
           await refreshProjectList();
           if (selectedProjectId) {
-            await Promise.all([
-              refreshTasks(selectedProjectId, { quiet: true }),
-              refreshWorkflowOptions(selectedProjectId),
-            ]);
+            await refreshTasks(selectedProjectId, { quiet: true });
           }
           if (detailTaskId) {
             setCommentsRevision((current) => current + 1);
@@ -752,7 +755,7 @@ export function App() {
   >({});
   const [processingNow, setProcessingNow] = useState(() => Date.now());
   const [recentProjectIds, setRecentProjectIds] = useState(readRecentProjectIds);
-  const initialProjectId = query.get("project") ?? recentProjectIds[0] ?? GLOBAL_PROJECT_ID;
+  const initialProjectId = query.get("project") ?? recentProjectIds[0] ?? ALL_PROJECTS_ID;
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState(initialProjectId);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -1066,6 +1069,9 @@ export function App() {
   const contextMenuTask = contextMenu
     ? tasks.find((task) => task.id === contextMenu.taskId) ?? null
     : null;
+  const contextMenuWorkspacePath = contextMenuTask
+    ? deviceWorkspacePaths[contextMenuTask.projectId]
+    : undefined;
   const availableLabels = isAllProjects
     ? [...new Set(projects.flatMap((project) => project.labels))]
     : selectedProject?.labels ?? [];
@@ -1137,6 +1143,16 @@ export function App() {
       : [];
   });
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
+  function openTaskContextMenu(task: Task, position: { x: number; y: number }) {
+    if (
+      isAllProjects
+      && (!embedded || window.parent === window)
+      && task.developmentContext?.type === "worktree"
+    ) {
+      setDevelopmentScanLoading(true);
+    }
+    setContextMenu({ taskId: task.id, ...position });
+  }
   const issueReadStorageKey = selectedProjectId
     ? `${ISSUE_READ_KEY_PREFIX}:${taskboardMetadata?.mode ?? "local"}:${selectedProjectId}`
     : null;
@@ -1548,8 +1564,16 @@ export function App() {
     document.documentElement.dataset.theme = theme;
     document.documentElement.dataset.embedded = String(embedded);
     document.documentElement.style.colorScheme = theme;
-    if (!embedded) taskboardStorage.setItem("taskboard.theme", theme);
   }, [embedded, theme]);
+
+  useEffect(() => {
+    if (embedded && window.parent !== window) return;
+    const systemTheme = window.matchMedia("(prefers-color-scheme: dark)");
+    const syncTheme = () => setTheme(systemTheme.matches ? "dark" : "light");
+    syncTheme();
+    systemTheme.addEventListener("change", syncTheme);
+    return () => systemTheme.removeEventListener("change", syncTheme);
+  }, [embedded]);
 
   useEffect(() => {
     if (selectedProjectId) {
@@ -1938,30 +1962,39 @@ export function App() {
   }, [isJiraProject, jiraConnection?.configured, refreshTasks, taskScopeProjectId]);
 
   useEffect(() => {
-    if (!selectedProjectId || isAllProjects) {
+    const standalone = !embedded || window.parent === window;
+    const developmentProjectId = isAllProjects
+      ? standalone ? contextMenuTask?.projectId : null
+      : selectedProjectId;
+    if (!developmentProjectId) {
       setDevelopmentScan({ workspacePath: null, contexts: [] });
       setDevelopmentScanLoading(false);
       return;
     }
     const controller = new AbortController();
-    const codexProjectId = selectedProjectId === GLOBAL_PROJECT_ID ? hostContext?.projectId : selectedProjectId;
-    const codexThreadId = hostContext?.threadId ?? detailTask?.threadId ?? undefined;
-    setDevelopmentScan({ workspacePath: selectedDeviceWorkspacePath ?? null, contexts: [] });
+    const codexProjectId = developmentProjectId === GLOBAL_PROJECT_ID
+      ? hostContext?.projectId
+      : developmentProjectId;
+    const codexThreadId = hostContext?.threadId
+      ?? (isAllProjects ? contextMenuTask?.threadId : detailTask?.threadId)
+      ?? undefined;
+    const workspacePath = isAllProjects ? contextMenuWorkspacePath : selectedDeviceWorkspacePath;
+    setDevelopmentScan({ workspacePath: workspacePath ?? null, contexts: [] });
     setDevelopmentScanLoading(true);
     void listDevelopmentContexts(
-      selectedProjectId,
+      developmentProjectId,
       codexProjectId,
       codexThreadId,
       controller.signal,
-      selectedDeviceWorkspacePath,
+      workspacePath,
     )
       .then((scan) => {
         setDevelopmentScan(scan);
-        if (scan.workspacePath) rememberDeviceWorkspacePath(selectedProjectId, scan.workspacePath);
+        if (scan.workspacePath) rememberDeviceWorkspacePath(developmentProjectId, scan.workspacePath);
       })
       .catch((error) => {
         if ((error as Error).name !== "AbortError") {
-          setDevelopmentScan({ workspacePath: selectedDeviceWorkspacePath ?? null, contexts: [] });
+          setDevelopmentScan({ workspacePath: workspacePath ?? null, contexts: [] });
         }
       })
       .finally(() => {
@@ -1969,7 +2002,11 @@ export function App() {
       });
     return () => controller.abort();
   }, [
+    contextMenuTask?.projectId,
+    contextMenuTask?.threadId,
+    contextMenuWorkspacePath,
     detailTask?.threadId,
+    embedded,
     hostContext?.projectId,
     hostContext?.threadId,
     isAllProjects,
@@ -3042,6 +3079,7 @@ export function App() {
   }
 
   async function openTaskInThread(task: Task) {
+    const standalone = !embedded || window.parent === window;
     const projectless = task.projectId === GLOBAL_PROJECT_ID;
     const taskboardProject = projects.find((project) => project.id === task.projectId);
     const savedRemoteIdentity = projectCodexIdentities[task.projectId]?.codexProjectKind === "remote"
@@ -3059,7 +3097,7 @@ export function App() {
       ));
       return;
     }
-    const workspacePath = projectless
+    let workspacePath = projectless
       ? undefined
       : task.developmentContext?.type === "worktree"
         ? task.developmentContext.path
@@ -3068,13 +3106,40 @@ export function App() {
           ?? taskboardProject?.workspacePath;
     const instruction = `e-taskboard 處理任務面板任務 ${task.identifier}，並同步進度狀態。`;
 
-    if (!embedded || window.parent === window) {
-      setActionError([
-        "在新對話開啟僅可在 Codex 內嵌任務面板中使用。請從 Codex 側欄開啟任務面板後重試。",
-        "Open in new conversation is available only in the embedded Codex Taskboard. Open Taskboard from the Codex sidebar and try again.",
-      ]);
-      return;
+    if (
+      !projectless
+      && task.developmentContext?.type === "worktree"
+      && codexProjectContext?.codexProjectKind !== "remote"
+    ) {
+      const expectedWorktreePath = task.developmentContext.path;
+      const baseWorkspacePath = codexProjectContext?.workspacePath
+        ?? deviceWorkspacePaths[task.projectId]
+        ?? taskboardProject?.workspacePath;
+      if (standalone) {
+        const worktreeExists = developmentScan.contexts.some((context) => (
+          context.type === "worktree" && context.path === expectedWorktreePath
+        ));
+        if (!worktreeExists) workspacePath = developmentScan.workspacePath ?? baseWorkspacePath;
+      } else {
+        try {
+          const scan = await listDevelopmentContexts(
+            task.projectId,
+            codexProjectContext?.codexProjectId,
+            hostContext?.threadId ?? undefined,
+            undefined,
+            baseWorkspacePath,
+          );
+          const worktreeExists = scan.contexts.some((context) => (
+            context.type === "worktree" && context.path === expectedWorktreePath
+          ));
+          if (!worktreeExists) workspacePath = scan.workspacePath ?? baseWorkspacePath;
+        } catch (error) {
+          setActionError(errorMessage(error));
+          return;
+        }
+      }
     }
+
     if (codexProjectContext?.codexProjectKind === "remote" && !codexProjectContext.workspacePath) {
       setActionError(text(
         "SSH 遠端專案缺少精確工作目錄對應。",
@@ -3119,6 +3184,20 @@ export function App() {
         )).join("\n")
       : "（無）"}`;
     const embeddedInstruction = `${beforeDescription}${task.description}${afterDescription}`;
+    if (standalone) {
+      if (codexProjectContext?.codexProjectKind === "remote") {
+        setActionError(text(
+          "請在 Codex App 中開啟該 SSH 遠端專案的新對話。",
+          "Open the new SSH remote project conversation in the Codex app.",
+        ));
+        return;
+      }
+      const deepLink = new URL("codex://threads/new");
+      if (workspacePath) deepLink.searchParams.set("path", workspacePath);
+      deepLink.searchParams.set("prompt", embeddedInstruction);
+      window.location.assign(deepLink.toString());
+      return;
+    }
     setOpeningThreadTaskId(task.id);
     setActionError(null);
     if (codexProjectContext?.codexProjectKind === "remote" && codexProjectContext.workspacePath) {
@@ -3371,49 +3450,6 @@ export function App() {
           setReadmeRevision={setReadmeRevision}
         />
       )}
-      {!embedded && (
-        <aside className="app-nav" aria-label={text("任務面板導覽", "Taskboard navigation")}>
-          <div className="brand-row">
-            <span className="brand-mark" aria-hidden="true"><ProjectIcon color="currentColor" /></span>
-            <span>{text("任務面板", "Taskboard")}</span>
-          </div>
-
-          <nav className="primary-nav" aria-label={text("檢視", "Views")}>
-            <span className="nav-label">{text("工作區", "Workspace")}</span>
-            <button className="nav-item active" type="button" aria-current="page">
-              <span className="nav-glyph" aria-hidden="true">
-                <LinearIcon name="myIssues" />
-              </span>
-              {text("議題", "Issues")}
-              <span className="nav-count">{tasks.length}</span>
-            </button>
-          </nav>
-
-          <div className="nav-spacer" />
-          <div className="nav-footer">
-            <div className={`connection connection-${connection}`}>
-              <span aria-hidden="true" />
-              {connection === "live"
-                ? text("即時同步", "Live sync")
-                : text("正在重新連線…", "Reconnecting…")}
-            </div>
-            <button
-              type="button"
-              className="theme-toggle"
-              onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")}
-              aria-label={theme === "dark"
-                ? text("切換到淺色模式", "Switch to light theme")
-                : text("切換到深色模式", "Switch to dark theme")}
-            >
-              <span aria-hidden="true"><LinearIcon name={theme === "dark" ? "sun" : "moon"} /></span>
-              {theme === "dark"
-                ? text("淺色模式", "Light mode")
-                : text("深色模式", "Dark mode")}
-            </button>
-          </div>
-        </aside>
-      )}
-
       <main className="workspace">
         <header className="workspace-header">
           <div className="workspace-title">
@@ -3791,8 +3827,10 @@ export function App() {
           <ProjectReadmeView
             key={selectedProjectId}
             project={selectedProject}
-            currentUser={currentUser}
+            tasks={tasks.filter((task) => task.projectId === selectedProject.id)}
+            referenceTasks={referenceTasks.filter((task) => task.projectId === selectedProject.id)}
             revision={readmeRevision}
+            onOpenTask={openTaskDetail}
             onError={setActionError}
           />
         ) : boardView === "dashboard" && selectedProject ? (
@@ -3885,7 +3923,7 @@ export function App() {
                         onEdit={openTaskDetail}
                         onUpdate={updateTaskProperties}
                         onComplete={(task) => void moveTask(task, "done")}
-                        onContextMenu={(task, position) => setContextMenu({ taskId: task.id, ...position })}
+                        onContextMenu={openTaskContextMenu}
                         onDragStart={startTaskDrag}
                         onDragEnd={endTaskDrag}
                         onDragEnter={setDropTarget}
@@ -3926,7 +3964,7 @@ export function App() {
                     onDelete={setPendingArchivedTaskDelete}
                     onEdit={openTaskDetail}
                     onUpdate={updateTaskProperties}
-                    onContextMenu={(task, position) => setContextMenu({ taskId: task.id, ...position })}
+                    onContextMenu={openTaskContextMenu}
                     onDragStart={startTaskDrag}
                     onDragEnd={endTaskDrag}
                     onDragEnter={setDropTarget}
@@ -4202,6 +4240,7 @@ export function App() {
           ).catch(() => {})}
           onDuplicate={(task) => void duplicateTask(task)}
           onCopy={(text, message) => void copyText(text, message)}
+          openInThreadDisabled={developmentScanLoading}
           onOpenInThread={openTaskInThread}
           onArchive={(task) => void archiveTask(task)}
         />

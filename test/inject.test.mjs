@@ -432,16 +432,12 @@ test("host navigation follows Codex's renderer message bus", () => {
   assert.doesNotMatch(source, /new CustomEvent\("codex-message-from-view"/);
 });
 
-test("the standalone web page reports that new Codex conversations require the embedded Taskboard", () => {
-  assert.match(
-    webApp,
-    /setActionError\(\[\s*"在新對話開啟僅可在 Codex 內嵌任務面板中使用。請從 Codex 側欄開啟任務面板後重試。",/,
-  );
-  assert.match(
-    webApp,
-    /"Open in new conversation is available only in the embedded Codex Taskboard\. Open Taskboard from the Codex sidebar and try again\.",/,
-  );
-  assert.doesNotMatch(webApp, /codex:\/\/new/);
+test("the standalone web page always opens a project-scoped Codex composer", () => {
+  assert.doesNotMatch(webApp, /standalone && task\.threadBinding[\s\S]*?openThread\(task\.threadBinding\)/);
+  assert.doesNotMatch(webApp, /standalone && task\.legacyLocalThreadId[\s\S]*?openLegacyLocalThread\(task\.legacyLocalThreadId\)/);
+  assert.match(webApp, /new URL\("codex:\/\/threads\/new"\)/);
+  assert.match(webApp, /deepLink\.searchParams\.set\("path", workspacePath\)/);
+  assert.match(webApp, /deepLink\.searchParams\.set\("prompt", embeddedInstruction\)/);
 });
 
 test("host context captures all Codex projects even when the sidebar section is collapsed", () => {

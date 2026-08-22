@@ -21,6 +21,7 @@ import type {
   JiraConnection,
   Project,
   ProjectReadme,
+  ProjectReadmeAttachment,
   ProjectSummary,
   Task,
   TaskChangeActivity,
@@ -463,6 +464,25 @@ export async function saveProjectReadme(
   return data.readme;
 }
 
+export async function uploadProjectReadmeAttachment(
+  projectId: string,
+  file: File,
+): Promise<ProjectReadmeAttachment> {
+  const data = await request<{ attachment: ProjectReadmeAttachment }>(
+    `/api/projects/${encodeURIComponent(projectId)}/readme/attachments`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": file.type || "application/octet-stream",
+        "X-Taskboard-Filename": encodeURIComponent(file.name),
+        "X-Taskboard-Attachment-Kind": "inline",
+      },
+      body: file,
+    },
+  );
+  return data.attachment;
+}
+
 export async function createProject(input: {
   id: string;
   name: string;
@@ -767,7 +787,7 @@ export async function deleteAttachment(attachment: Attachment): Promise<void> {
   });
 }
 
-export function attachmentContentUrl(attachment: Attachment): string {
+export function attachmentContentUrl(attachment: { id: string }): string {
   return `api/attachments/${encodeURIComponent(attachment.id)}/content`;
 }
 
