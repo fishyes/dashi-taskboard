@@ -19,6 +19,7 @@ import { TaskConversationMenu } from "./TaskConversationMenu";
 interface DashboardViewProps {
   projectId: string;
   projectCreatedAt: string | null;
+  isAllProjects: boolean;
   tasks: Task[];
   presentations: Record<string, TaskCardPresentation>;
   currentUser: ActorIdentity;
@@ -165,6 +166,7 @@ function shortDate(value: string, locale: string) {
 export function DashboardView({
   projectId,
   projectCreatedAt,
+  isAllProjects,
   tasks,
   presentations,
   currentUser,
@@ -190,6 +192,11 @@ export function DashboardView({
   }, [animateSummaryOnMount, onSummaryAnimationStart, projectId]);
 
   useEffect(() => {
+    if (isAllProjects) {
+      setProjectSummary(null);
+      setSummaryLoadFailed(false);
+      return undefined;
+    }
     let disposed = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const controller = new AbortController();
@@ -217,7 +224,7 @@ export function DashboardView({
       controller.abort();
       if (timer) clearTimeout(timer);
     };
-  }, [projectId]);
+  }, [isAllProjects, projectId]);
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -237,7 +244,16 @@ export function DashboardView({
   const completionRate = tasks.length
     ? Math.round((completedTasks.length / tasks.length) * 100)
     : 0;
-  const progressData = buildProgressData(tasks, todayValue, projectCreatedAt);
+  const aggregateCreatedAt = isAllProjects
+    ? tasks.reduce<string | null>((earliest, task) => (
+        !earliest || task.createdAt < earliest ? task.createdAt : earliest
+      ), null)
+    : null;
+  const progressData = buildProgressData(
+    tasks,
+    todayValue,
+    projectCreatedAt ?? aggregateCreatedAt,
+  );
   const progressChart = (() => {
     const left = 0;
     const right = 426;
@@ -412,13 +428,18 @@ export function DashboardView({
     },
   ];
 
-  const summaryBody = projectSummary?.summary
-    ?? (summaryLoadFailed || projectSummary?.error
-      ? text("Codex 暫時無法產生專案總結。", "Codex cannot generate the project summary now.")
-      : text(
-          "Codex 正在整理目前專案的進展、風險和下一步重點…",
-          "Codex is reviewing the project's progress, risks, and next steps…",
-        ));
+  const summaryBody = isAllProjects
+    ? text(
+        `所有專案共有 ${tasks.length} 個議題，${completedTasks.length} 個已完成，${activeTasks.length} 個尚未結束；目前 ${tasks.filter((task) => task.status === "blocked").length} 個遇到阻礙，${overdueTasks.length} 個已逾期。`,
+        `Across all projects, ${tasks.length} issues are tracked: ${completedTasks.length} completed and ${activeTasks.length} still open; ${tasks.filter((task) => task.status === "blocked").length} are blocked and ${overdueTasks.length} overdue.`,
+      )
+    : projectSummary?.summary
+      ?? (summaryLoadFailed || projectSummary?.error
+        ? text("Codex 暫時無法產生專案總結。", "Codex cannot generate the project summary now.")
+        : text(
+            "Codex 正在整理目前專案的進展、風險和下一步重點…",
+            "Codex is reviewing the project's progress, risks, and next steps…",
+          ));
   const hour = new Date().getHours();
   const greeting = hour < 12
     ? text("上午好", "Good morning")
@@ -430,7 +451,7 @@ export function DashboardView({
     `${greeting}，${currentUser.name}，今天是${summaryDate}，${summaryBody}`,
     `${greeting}, ${currentUser.name}. Today is ${summaryDate}. ${summaryBody}`,
   );
-  const summaryReady = projectSummary !== null || summaryLoadFailed;
+  const summaryReady = isAllProjects || projectSummary !== null || summaryLoadFailed;
 
   useEffect(() => {
     if (!summaryReady) {

@@ -1109,10 +1109,8 @@
           ?.getAttribute("data-above-composer-conversation-id"),
       );
       let codexHostId = "local";
-      let targetRoot;
-      if (projectless) {
-        targetRoot = "";
-      } else if (codexProjectKind === "remote") {
+      let targetRoot = "";
+      if (!projectless && codexProjectKind === "remote") {
         codexHostId = typeof payload?.codexHostId === "string"
           ? payload.codexHostId.trim()
           : "";
@@ -1121,7 +1119,7 @@
           : "";
         await waitForRemoteProject(requestedProjectId, codexHostId, codexProjectWorkspacePath);
         targetRoot = codexProjectWorkspacePath;
-      } else {
+      } else if (!projectless) {
         const target = await resolveNativeProject(requestedProjectId, workspacePath);
         if (!target) {
           throw new Error(hostText(
@@ -1148,41 +1146,26 @@
           ...(projectless ? { project: null } : {}),
         },
       });
-      const started = await requestHostTaskConversationStart({
-        taskId,
-        previousThreadId,
-        codexHostId,
-        projectless,
-        targetRoot,
-        instruction,
-        title,
-      });
-      const startedThreadId = normalizeThreadId(started.threadId);
-      const visibleThreadComposer = Array.from(document.querySelectorAll(
-        '[data-codex-composer-root][data-composer-placement="thread"]',
-      )).find((candidate) => candidate.getClientRects().length > 0);
-      const visibleThreadId = normalizeThreadId(
-        visibleThreadComposer
-          ?.querySelector("[data-above-composer-conversation-id]")
-          ?.getAttribute("data-above-composer-conversation-id"),
-      );
-      if (visibleThreadId !== startedThreadId) {
-        await dispatchHostMessage({
-          type: "navigate-to-route",
-          path: routeForThread(startedThreadId),
+      if (codexProjectKind === "remote") {
+        const started = await requestHostTaskConversationStart({
+          taskId,
+          previousThreadId,
+          codexHostId,
+          projectless,
+          targetRoot,
+          instruction,
+          title,
         });
+        const startedThreadId = normalizeThreadId(started.threadId);
+        if (!startedThreadId) {
+          throw hostError("Codex 沒有回傳新對話 ID", "Codex did not return the new conversation ID");
+        }
+        lastNativeThreadId = startedThreadId;
+        postToFrame({ type: "taskboard:thread-prepared", payload: { taskId, threadId: started.threadId } });
+      } else {
+        postToFrame({ type: "taskboard:thread-prepared", payload: { taskId } });
       }
-      lastNativeThreadId = startedThreadId;
-      postToFrame({ type: "taskboard:thread-prepared", payload: { taskId, threadId: started.threadId } });
     } catch (error) {
-      const createdThreadId = normalizeThreadId(error?.threadId);
-      if (createdThreadId && codexProjectKind !== "remote") {
-        await dispatchHostMessage({
-          type: "navigate-to-route",
-          path: routeForThread(createdThreadId),
-        });
-        lastNativeThreadId = createdThreadId;
-      }
       postToFrame({
         type: "taskboard:thread-create-error",
         payload: {

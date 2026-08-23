@@ -62,7 +62,9 @@ test("the launcher minimum system version matches the current Codex client requi
 
 test("desktop build scripts pass the preparation target directly on every platform", () => {
   assert.match(packageJson.scripts["app:build"], /prepare-tauri-app\.mjs --target universal-apple-darwin/);
+  assert.match(packageJson.scripts["app:build:linux:x64"], /prepare-tauri-app\.mjs --target x86_64-unknown-linux-gnu/);
   assert.match(packageJson.scripts["app:build:windows"], /prepare-tauri-app\.mjs --target x86_64-pc-windows-msvc/);
   assert.doesNotMatch(packageJson.scripts["app:build"], /app:prepare --/);
+  assert.doesNotMatch(packageJson.scripts["app:build:linux:x64"], /app:prepare --/);
   assert.doesNotMatch(packageJson.scripts["app:build:windows"], /app:prepare --/);
 });

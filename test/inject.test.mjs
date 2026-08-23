@@ -328,10 +328,10 @@ test("only a loopback Taskboard iframe can request native automation", () => {
   );
 });
 
-test("issues start a native Codex conversation in the confirmed project with the task title", () => {
+test("issues open an unsent native Codex composer in the confirmed project", () => {
   const createThreadSource = source.slice(
     source.indexOf("async function createThreadForTask"),
-    source.indexOf("async function handleAutomationRequest"),
+    source.indexOf("function buildAutomationHostPayload"),
   );
   assert.match(source, /async function createThreadForTask\(payload\)/);
   assert.match(source, /async function nativeProjectContext\(\)/);
@@ -354,27 +354,26 @@ test("issues start a native Codex conversation in the confirmed project with the
   assert.match(source, /await waitForNativeProject\(targetRoot\)/);
   assert.match(
     createThreadSource,
-    /if \(codexProjectKind === "remote"\) \{[\s\S]*?codexHostId = typeof payload\?\.codexHostId[\s\S]*?codexProjectWorkspacePath[\s\S]*?await waitForRemoteProject\(requestedProjectId, codexHostId, codexProjectWorkspacePath\);\s*targetRoot = codexProjectWorkspacePath;/,
+    /if \(!projectless && codexProjectKind === "remote"\) \{[\s\S]*?codexHostId = typeof payload\?\.codexHostId[\s\S]*?codexProjectWorkspacePath[\s\S]*?await waitForRemoteProject\(requestedProjectId, codexHostId, codexProjectWorkspacePath\);/,
   );
-  assert.match(source, /const previousThreadId = normalizeThreadId/);
   assert.match(source, /const focusComposerNonce = crypto\.randomUUID\(\)/);
-  assert.match(source, /state: \{\s*focusComposerNonce,\s*prefillPrompt: instruction,/);
+  assert.match(createThreadSource, /type: "navigate-to-route",\s*path: "\/",\s*state: \{\s*focusComposerNonce,\s*prefillPrompt: instruction,/);
   assert.match(source, /const HOST_REQUEST_TIMEOUT_MS = 12_000/);
   assert.match(source, /const TASK_CONVERSATION_REQUEST_TIMEOUT_MS = 75_000/);
   assert.match(source, /function requestHost\(action, payload = \{\}, timeoutMs = HOST_REQUEST_TIMEOUT_MS\)/);
-  assert.match(source, /requestHostTaskConversationStart\(\{\s*taskId,\s*previousThreadId,\s*codexHostId,\s*projectless,\s*targetRoot,\s*instruction,\s*title,/);
+  assert.match(createThreadSource, /if \(codexProjectKind === "remote"\) \{[\s\S]*?requestHostTaskConversationStart\(\{\s*taskId,\s*previousThreadId,\s*codexHostId,\s*projectless,\s*targetRoot,\s*instruction,\s*title,/);
   assert.match(
     source,
     /requestHost\("start-task-conversation", \{\s*taskId,\s*previousThreadId,\s*codexHostId,\s*projectless,\s*targetRoot,\s*instruction,\s*title,\s*\}, TASK_CONVERSATION_REQUEST_TIMEOUT_MS\)/,
   );
-  assert.match(source, /lastNativeThreadId = startedThreadId/);
-  assert.match(source, /type: "taskboard:thread-prepared", payload: \{ taskId, threadId: started\.threadId \}/);
+  assert.match(createThreadSource, /lastNativeThreadId = startedThreadId/);
+  assert.match(createThreadSource, /type: "taskboard:thread-prepared", payload: \{ taskId, threadId: started\.threadId \}/);
+  assert.match(createThreadSource, /else \{\s*postToFrame\(\{ type: "taskboard:thread-prepared", payload: \{ taskId \} \}\)/);
   assert.match(
     webApp,
-    /const instruction = `e-taskboard 處理任務面板任務 \$\{task\.identifier\}，並同步進度狀態。`/,
+    /const embeddedInstruction = text\([\s\S]*?\[\$manage-taskboard\]\(\$\{manageTaskboardSkillPath\}\) 議題 ID：\$\{task\.identifier\}/,
   );
   assert.doesNotMatch(webApp, /const prompt =/);
-  assert.doesNotMatch(webApp, /skillName: "manage-taskboard"/);
   assert.match(webApp, /instruction: embeddedInstruction,/);
   assert.match(webApp, /Promise\.all\(\[getTask\(task\.id\), listComments\(task\.id\)\]\)/);
   assert.match(webApp, /moveTaskRequest\(latestTask, "in_progress", undefined, null\)/);
@@ -382,13 +381,10 @@ test("issues start a native Codex conversation in the confirmed project with the
   assert.match(webApp, /完整描述[\s\S]*全部評論[\s\S]*開發上下文/);
   assert.match(webApp, /遠端 worker 不得執行 taskctl/);
   assert.match(webApp, /title: task\.title,/);
+  assert.match(webApp, /instruction: embeddedInstruction,/);
   assert.match(webApp, /type: "taskboard:create-thread"/);
-  assert.match(webApp, /codexProjectWorkspacePath: identity\.workspacePath/);
-  assert.match(webApp, /workspacePath: identity\.workspacePath/);
-  assert.match(webApp, /const binding: CodexThreadBinding = \{ threadId, \.\.\.pending\.identity \}/);
-  assert.match(webApp, /moveTaskRequest\([\s\S]*pending\.claimedTask,[\s\S]*"in_progress",[\s\S]*binding/);
-  assert.match(webApp, /pending\.previousTask\.status[\s\S]*binding/);
-  assert.match(webApp, /type: "taskboard:open-thread",[\s\S]*?payload: binding/);
+  assert.match(webApp, /codexProjectWorkspacePath: codexProjectContext\?\.workspacePath/);
+  assert.match(webApp, /workspacePath,/);
 });
 
 test("the standalone web page opens linked Codex tasks through the app deep link", () => {

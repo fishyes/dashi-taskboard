@@ -13,19 +13,11 @@ import {
   type SetStateAction,
 } from "react";
 import {
-  isAutomationModel,
-  isAutomationReasoningEffort,
-  isSupportedModelEffort,
-  type AutomationModel,
-  type AutomationReasoningEffort,
-} from "../../shared/taskboard-automation-options.mjs";
-import {
   ApiError,
   addTaskRelation,
   archiveTask as archiveTaskRequest,
   createProjectLabel as createProjectLabelRequest,
   createProject as createProjectRequest,
-  createComment,
   createTask as createTaskRequest,
   configureJiraConnection,
   deleteArchivedTask as deleteArchivedTaskRequest,
@@ -35,14 +27,12 @@ import {
   getCodexThreadProgress,
   getHostRuntime,
   getJiraConnection,
-  getTask,
   getTaskboardRevision,
   getTaskboardMetadata,
   listArchivedTasks,
   listDevelopmentContexts,
   listDeviceWorkspaces,
   listProjects,
-  listComments,
   listTasks,
   moveTask as moveTaskRequest,
   publishHostRuntime,
@@ -124,6 +114,7 @@ import {
 import {
   TASK_STATUSES,
   type ActorIdentity,
+  type AiChatModel,
   type AiChatThread,
   type CodexProjectIdentity,
   type CodexThreadBinding,
@@ -209,12 +200,6 @@ interface UndoNotice {
   message: string;
 }
 
-interface PendingRemoteThreadClaim {
-  claimedTask: Task;
-  previousTask: Task;
-  identity: CodexProjectIdentity;
-}
-
 type ProjectAutomationStatus = "ACTIVE" | "PAUSED";
 type AutomationQuotaState = "available" | "blocked" | "unknown" | "unavailable";
 type AutomationIntervalMinutes = 5 | 10 | 15 | 30 | 60;
@@ -237,8 +222,8 @@ interface ProjectAutomationRecord {
   quotaAware: boolean;
   quota?: AutomationQuotaStatus;
   intervalMinutes: AutomationIntervalMinutes;
-  model: AutomationModel;
-  reasoningEffort: AutomationReasoningEffort;
+  model: string;
+  reasoningEffort: string;
 }
 
 type ProjectAutomationOptions = Pick<
@@ -268,8 +253,8 @@ type ProjectAutomations = Record<string, ProjectAutomationRecord>;
 interface AutomationHostItem {
   id: string;
   status: ProjectAutomationStatus;
-  model: AutomationModel;
-  reasoningEffort: AutomationReasoningEffort;
+  model: string;
+  reasoningEffort: string;
   rrule: string;
 }
 
@@ -288,8 +273,8 @@ interface AutomationHostResponse {
     enabledByUser: boolean;
     quotaAware: boolean;
     intervalMinutes: AutomationIntervalMinutes;
-    model: AutomationModel;
-    reasoningEffort: AutomationReasoningEffort;
+    model: string;
+    reasoningEffort: string;
   };
   error?: string;
 }
@@ -317,14 +302,6 @@ const PROJECT_AUTOMATIONS_KEY = "taskboard.projectAutomations.v1";
 const BOARD_CARD_DISPLAY_KEY = "taskboard.board-card-display.v1";
 const ISSUE_READ_KEY_PREFIX = "taskboard.issue-read.v1";
 const FIRST_USE_COMPLETE_KEY = "taskboard.first-use-complete.v1";
-const DEFAULT_AUTOMATION_OPTIONS = {
-  enabledByUser: false,
-  quotaAware: false,
-  intervalMinutes: 5,
-  model: "gpt-5.5",
-  reasoningEffort: "high",
-} as const;
-
 function readIssueActivityKeys(storageKey: string): Record<string, string> {
   try {
     const value = JSON.parse(taskboardStorage.getItem(storageKey) ?? "{}");
@@ -443,8 +420,8 @@ function readProjectAutomations(): ProjectAutomations {
     for (const [projectId, record] of Object.entries(value)) {
       if (!record || typeof record !== "object" || Array.isArray(record)) continue;
       const candidate = record as Partial<ProjectAutomationRecord>;
-      const model = candidate.model ?? "gpt-5.5";
-      const reasoningEffort = candidate.reasoningEffort ?? "high";
+      const model = candidate.model;
+      const reasoningEffort = candidate.reasoningEffort;
       const enabledByUser = candidate.enabledByUser ?? candidate.status === "ACTIVE";
       const quotaAware = candidate.quotaAware ?? false;
       if (
@@ -455,9 +432,10 @@ function readProjectAutomations(): ProjectAutomations {
         || typeof candidate.workspacePath !== "string"
         || (candidate.status !== "ACTIVE" && candidate.status !== "PAUSED")
         || !isAutomationIntervalMinutes(candidate.intervalMinutes ?? 5)
-        || !isAutomationModel(model)
-        || !isAutomationReasoningEffort(reasoningEffort)
-        || !isSupportedModelEffort(model, reasoningEffort)
+        || typeof model !== "string"
+        || !model.trim()
+        || typeof reasoningEffort !== "string"
+        || !reasoningEffort.trim()
         || (candidate.status === "ACTIVE" && !candidate.automationId)
         || typeof enabledByUser !== "boolean"
         || typeof quotaAware !== "boolean"
@@ -511,9 +489,10 @@ function isAutomationHostPolicy(
     && typeof value.enabledByUser === "boolean"
     && typeof value.quotaAware === "boolean"
     && isAutomationIntervalMinutes(value.intervalMinutes)
-    && isAutomationModel(value.model)
-    && isAutomationReasoningEffort(value.reasoningEffort)
-    && isSupportedModelEffort(value.model, value.reasoningEffort),
+    && typeof value.model === "string"
+    && Boolean(value.model.trim())
+    && typeof value.reasoningEffort === "string"
+    && Boolean(value.reasoningEffort.trim()),
   );
 }
 
@@ -532,9 +511,10 @@ function isAutomationHostItem(value: unknown): value is AutomationHostItem {
   return (
     typeof item.id === "string"
     && (item.status === "ACTIVE" || item.status === "PAUSED")
-    && isAutomationModel(item.model)
-    && isAutomationReasoningEffort(item.reasoningEffort)
-    && isSupportedModelEffort(item.model, item.reasoningEffort)
+    && typeof item.model === "string"
+    && Boolean(item.model.trim())
+    && typeof item.reasoningEffort === "string"
+    && Boolean(item.reasoningEffort.trim())
     && typeof item.rrule === "string"
     && intervalMinutesFromRrule(item.rrule) !== null
   );
@@ -827,6 +807,12 @@ export function App() {
   const [projectAutomations, setProjectAutomations] = useState(readProjectAutomations);
   const [automationPending, setAutomationPending] = useState(false);
   const [automationError, setAutomationError] = useState<string | null>(null);
+  const [automationCatalog, setAutomationCatalog] = useState<{
+    projectId: string;
+    models: AiChatModel[];
+  } | null>(null);
+  const [automationCatalogLoading, setAutomationCatalogLoading] = useState(false);
+  const [automationCatalogError, setAutomationCatalogError] = useState<string | null>(null);
   const [announcement, setAnnouncementValue] = useState("");
   const [undoNotice, setUndoNotice] = useState<UndoNotice | null>(null);
   const projectsRequestRef = useRef(0);
@@ -857,7 +843,6 @@ export function App() {
     );
   }
   const pendingAutomationRequestsRef = useRef(new Map<string, PendingAutomationRequest>());
-  const pendingRemoteThreadClaimsRef = useRef(new Map<string, PendingRemoteThreadClaim>());
   const automationRequestInFlightRef = useRef<"list" | "save" | null>(null);
   const loadedAutomationProjectIdsRef = useRef(new Set<string>());
   const queuedAutomationSavesRef = useRef(new Map<string, QueuedProjectAutomationSave>());
@@ -903,6 +888,34 @@ export function App() {
   const selectedProject = projects.find((project) => project.id === selectedProjectId) ?? null;
   const isAllProjects = selectedProjectId === ALL_PROJECTS_ID;
   const isJiraProject = selectedProject?.source === "jira";
+  const automationModels = automationCatalog && automationCatalog.projectId === selectedProject?.id
+    ? automationCatalog.models
+    : [];
+  useEffect(() => {
+    setAutomationCatalog(null);
+    setAutomationCatalogError(null);
+    if (!selectedProject || !localAiChatAvailable) {
+      setAutomationCatalogLoading(false);
+      return;
+    }
+    const controller = new AbortController();
+    setAutomationCatalogLoading(true);
+    void getAiChatCatalog(selectedProject.id, controller.signal).then(
+      (catalog) => {
+        if (controller.signal.aborted) return;
+        setAutomationCatalog({ projectId: selectedProject.id, models: catalog.models });
+        setAutomationCatalogLoading(false);
+      },
+      (error) => {
+        if (controller.signal.aborted) return;
+        setAutomationCatalogError(error instanceof Error
+          ? error.message
+          : text("無法讀取 Codex 模型目錄", "Could not load the Codex model catalog."));
+        setAutomationCatalogLoading(false);
+      },
+    );
+    return () => controller.abort();
+  }, [localAiChatAvailable, selectedProject?.id, text]);
   const aiImportProjectId = hasLoadedTasks
     && tasks.length === 0
     && selectedProject
@@ -1333,6 +1346,10 @@ export function App() {
       setAutomationError(null);
       return;
     }
+    const models = automationCatalog?.projectId === automationRequestContext.taskboardProjectId
+      ? automationCatalog.models
+      : null;
+    if (!models) return;
     if (automationRequestInFlightRef.current) return;
     const projectId = automationRequestContext.taskboardProjectId;
     const stored = projectAutomationsRef.current[projectId];
@@ -1341,10 +1358,18 @@ export function App() {
     if (initialLoad) setAutomationPending(true);
     setAutomationError(null);
     try {
-      const options = stored ?? {
-        status: "PAUSED" as const,
-        ...DEFAULT_AUTOMATION_OPTIONS,
-      };
+      const defaultModel = models[0];
+      let options: ProjectAutomationOptions | undefined = stored;
+      if (!options) {
+        if (!defaultModel) return;
+        options = {
+          enabledByUser: false,
+          quotaAware: false,
+          intervalMinutes: 5,
+          model: defaultModel.slug,
+          reasoningEffort: defaultModel.defaultReasoningEffort,
+        };
+      }
       const response = await sendAutomationRequest(
         "list",
         options,
@@ -1433,6 +1458,7 @@ export function App() {
       void drainQueuedAutomationSaves(projectId);
     }
   }, [
+    automationCatalog,
     automationRequestContext,
     drainQueuedAutomationSaves,
     sendAutomationRequest,
@@ -1714,7 +1740,7 @@ export function App() {
           setOpeningThreadTaskId(null);
           setActionError(typeof payload.error === "string"
             ? payload.error
-            : textRef.current("無法在 Codex 中建立對話。", "Could not create the conversation in Codex."));
+            : textRef.current("無法在 Codex 中開啟新對話。", "Could not open a new conversation in Codex."));
         }
         return;
       }
@@ -3085,7 +3111,7 @@ export function App() {
     const savedRemoteIdentity = projectCodexIdentities[task.projectId]?.codexProjectKind === "remote"
       ? projectCodexIdentities[task.projectId]
       : null;
-    const codexProjectContext = savedRemoteIdentity
+    let codexProjectContext = savedRemoteIdentity
       ?? codexProjectContextForTaskProject(task.projectId);
     if (
       projectCodexIdentities[task.projectId]?.codexProjectKind === "remote"
@@ -3097,6 +3123,22 @@ export function App() {
       ));
       return;
     }
+    if (!standalone && codexProjectContext?.codexProjectKind === "remote") {
+      const identity = remoteIdentityForTask(task, codexProjectContext);
+      if (!identity) {
+        setActionError(task.developmentContext?.type === "worktree"
+          ? text(
+            "目標 SSH worktree 未在已儲存的主機中新增或對應。",
+            "The target SSH worktree is not added or mapped on the saved host.",
+          )
+          : text(
+            "已儲存的 SSH 遠端專案或主機目前不可用。",
+            "The saved SSH remote project or host is not available.",
+          ));
+        return;
+      }
+      codexProjectContext = identity;
+    }
     let workspacePath = projectless
       ? undefined
       : task.developmentContext?.type === "worktree"
@@ -3104,7 +3146,10 @@ export function App() {
         : codexProjectContext?.workspacePath
           ?? deviceWorkspacePaths[task.projectId]
           ?? taskboardProject?.workspacePath;
-    const instruction = `e-taskboard 處理任務面板任務 ${task.identifier}，並同步進度狀態。`;
+    const embeddedInstruction = text(
+      `[$manage-taskboard](${manageTaskboardSkillPath}) 議題 ID：${task.identifier}`,
+      `[$manage-taskboard](${manageTaskboardSkillPath}) Issue ID: ${task.identifier}`,
+    );
 
     if (
       !projectless
@@ -3148,42 +3193,6 @@ export function App() {
       return;
     }
     if (openingThreadTaskId) return;
-    const canonicalReferences = [
-      ...(task.relations.parent
-        ? [{
-            relation: "parent",
-            identifier: task.relations.parent.identifier,
-            title: task.relations.parent.title,
-          }]
-        : []),
-      ...task.relations.subIssues.map((relation) => ({
-        relation: "subIssues",
-        identifier: relation.identifier,
-        title: relation.title,
-      })),
-      ...task.relations.blockedBy.map((relation) => ({
-        relation: "blockedBy",
-        identifier: relation.identifier,
-        title: relation.title,
-      })),
-      ...task.relations.blocks.map((relation) => ({
-        relation: "blocks",
-        identifier: relation.identifier,
-        title: relation.title,
-      })),
-      ...task.relations.related.map((relation) => ({
-        relation: "related",
-        identifier: relation.identifier,
-        title: relation.title,
-      })),
-    ];
-    const beforeDescription = `${instruction}\n\n議題：${task.identifier} ${task.title}\n\n正文：\n`;
-    const afterDescription = `\n\nCanonical references：\n${canonicalReferences.length > 0
-      ? canonicalReferences.map((reference) => (
-          `- ${reference.relation}: ${reference.identifier} ${reference.title}`
-        )).join("\n")
-      : "（無）"}`;
-    const embeddedInstruction = `${beforeDescription}${task.description}${afterDescription}`;
     if (standalone) {
       if (codexProjectContext?.codexProjectKind === "remote") {
         setActionError(text(
@@ -3200,23 +3209,13 @@ export function App() {
     }
     setOpeningThreadTaskId(task.id);
     setActionError(null);
-    if (codexProjectContext?.codexProjectKind === "remote" && codexProjectContext.workspacePath) {
-      void openRemoteTaskInThread(task, {
-        ...codexProjectContext,
-        workspacePath: codexProjectContext.workspacePath,
-      });
-      return;
-    }
     postEmbeddedHostMessage({
       type: "taskboard:create-thread",
       payload: {
         taskId: task.id,
         identifier: task.identifier,
         title: task.title,
-        description: task.description,
-        canonicalReferences,
         instruction: embeddedInstruction,
-        projectName: taskboardProject?.name,
         projectless,
         codexProjectId: codexProjectContext?.codexProjectId,
         codexProjectKind: codexProjectContext?.codexProjectKind ?? "local",
@@ -3573,8 +3572,9 @@ export function App() {
             {selectedProject && (
               <ProjectAutomationMenu
                 automation={selectedProjectAutomation}
-                pending={automationPending}
-                error={automationError}
+                models={automationModels}
+                pending={automationPending || automationCatalogLoading}
+                error={automationCatalogError ?? automationError}
                 unavailableReason={automationProjectContext.unavailableReason}
                 onOpen={() => void reconcileProjectAutomation()}
                 onChange={(options) => void saveProjectAutomation(options)}
@@ -3608,16 +3608,14 @@ export function App() {
 
         {selectedProjectId && !detailTask && <div className="board-toolbar">
           <div className="view-tabs" aria-label={text("看板檢視", "Board views")}>
-            {!isAllProjects && (
-              <button
-                className={`view-tab${boardView === "dashboard" ? " active" : ""}`}
-                type="button"
-                aria-pressed={boardView === "dashboard"}
-                onClick={() => selectBoardView("dashboard")}
-              >
-                {text("儀表板", "Dashboard")}
-              </button>
-            )}
+            <button
+              className={`view-tab${boardView === "dashboard" ? " active" : ""}`}
+              type="button"
+              aria-pressed={boardView === "dashboard"}
+              onClick={() => selectBoardView("dashboard")}
+            >
+              {text("儀表板", "Dashboard")}
+            </button>
             <button
               className={`view-tab${boardView === "issues" ? " active" : ""}`}
               type="button"
@@ -3833,11 +3831,12 @@ export function App() {
             onOpenTask={openTaskDetail}
             onError={setActionError}
           />
-        ) : boardView === "dashboard" && selectedProject ? (
+        ) : boardView === "dashboard" && (selectedProject || isAllProjects) ? (
           <DashboardView
             key={selectedProjectId}
             projectId={selectedProjectId}
             projectCreatedAt={selectedProject?.createdAt ?? null}
+            isAllProjects={isAllProjects}
             tasks={tasks}
             presentations={taskPresentations}
             currentUser={currentUser}
