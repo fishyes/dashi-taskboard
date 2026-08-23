@@ -56,6 +56,14 @@
     "插件",
     "plugins",
   ];
+  const NATIVE_MENU_PAGE_LABELS = [
+    "設定",
+    "设置",
+    "settings",
+    "使用情況",
+    "使用情况",
+    "usage",
+  ];
   const PROJECT_SECTION_LABELS = ["projects", "專案", "项目"];
   const TASK_SECTION_LABELS = ["tasks", "任務", "任务", "chats", "對話", "对话"];
 
@@ -1809,6 +1817,15 @@
   }
 
   function isNativePageNavigation(target) {
+    const menuItem = target?.closest?.("[role='menuitem']");
+    if (menuItem) {
+      const label = normalizedLabel(
+        menuItem.innerText || menuItem.textContent || menuItem.getAttribute("aria-label"),
+      );
+      if (NATIVE_MENU_PAGE_LABELS.some((candidate) => (
+        label === candidate || label.startsWith(`${candidate} `)
+      ))) return true;
+    }
     const clickable = target?.closest?.("button,a,[role='button'],[data-app-action-sidebar-thread-id]");
     if (!clickable || clickable === entry || clickable.closest(`#${ENTRY_ID}`)) return false;
     if (!clickable.closest("aside nav[role='navigation']")) return false;

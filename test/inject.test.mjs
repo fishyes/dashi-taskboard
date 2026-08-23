@@ -122,6 +122,20 @@ test("Traditional Chinese native sidebar pages close the Taskboard before naviga
   assert.match(source, /if \(!active \|\| !isNativePageNavigation\(event\.target\)\) return;\s*closeTaskboard\(false\);/);
 });
 
+test("native Settings and Usage menu items close Taskboard before Codex opens Settings", () => {
+  const labelsSource = source.slice(
+    source.indexOf("const NATIVE_MENU_PAGE_LABELS"),
+    source.indexOf("const PROJECT_SECTION_LABELS"),
+  );
+  for (const label of ["設定", "设置", "settings", "使用情況", "使用情况", "usage"]) {
+    assert.match(labelsSource, new RegExp(`"${label}"`, "i"));
+  }
+  assert.match(
+    source,
+    /const menuItem = target\?\.closest\?\.\("\[role='menuitem'\]"\)[\s\S]*menuItem\.innerText \|\| menuItem\.textContent[\s\S]*label === candidate \|\| label\.startsWith\(`\$\{candidate\} `\)/,
+  );
+});
+
 test("the embedded header fills the native titlebar without clipping or a full-page no-drag region", () => {
   assert.match(source, /top: 0;/);
   assert.match(source, /z-index: 31 !important/);
