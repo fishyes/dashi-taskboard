@@ -152,6 +152,16 @@ test("the stable name and generated prompt are project-scoped and encode the cla
   assert.match(prompt, /關鍵改動、驗證結果、執行結果和剩餘風險/);
   assert.match(prompt, /in_review/);
   assert.match(prompt, /已綁定.*branch.*worktree/);
+  assert.match(prompt, /Codex list_threads/);
+  assert.match(prompt, /list_threads（limit=50）/);
+  assert.match(prompt, /pinnedThreads 與 threads/);
+  assert.match(prompt, /projectId="codex-project-123"/);
+  assert.match(prompt, /hostId="local"/);
+  assert.match(prompt, /cwd="\/Users\/example\/Documents\/ppt-skill"/);
+  assert.match(prompt, /legacy local 原地升級為完整 binding/);
+  assert.match(prompt, /--binding-thread-id "\$CODEX_THREAD_ID"/);
+  assert.match(prompt, /認領後的每一次 issue move.*五個完整 binding 欄位/);
+  assert.match(prompt, /不要省略 binding，避免將完整綁定降級為 legacy local/);
 });
 
 test("the remote automation prompt keeps taskctl local and delegates work to the SSH project", () => {
