@@ -44,6 +44,9 @@ async function runCli(argv, overrides = {}) {
     stdout: stdout.stream,
     stderr: stderr.stream,
     ...overrides,
+    runtimeReadFile: overrides.runtimeReadFile ?? (async () => {
+      throw Object.assign(new Error("not found"), { code: "ENOENT" });
+    }),
     env,
   });
   return { exitCode, stdout, stderr };
