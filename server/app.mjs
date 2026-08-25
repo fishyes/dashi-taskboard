@@ -54,6 +54,7 @@ const INLINE_ATTACHMENT_TYPES = new Set([
 ]);
 const PROJECT_ID_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
 const TRUSTED_EMBED_ORIGINS = new Set(["app://-"]);
+const TRUSTED_ORIGINS_ENV = "CODEX_TASKBOARD_TRUSTED_ORIGINS";
 const CODEX_AGENT_ACTOR = {
   type: "agent",
   id: "codex-agent",
@@ -162,7 +163,44 @@ function isTrustedNetworkHost(hostname) {
   return false;
 }
 
-function assertTrustedNetworkRequest(request, allowOpaqueOrigin = false) {
+function parseTrustedOrigins(value) {
+  if (value === undefined) return new Set();
+  const configured = String(value).trim();
+  if (!configured) {
+    throw new Error(`${TRUSTED_ORIGINS_ENV} must not be empty when configured`);
+  }
+
+  const origins = new Set();
+  for (const rawOrigin of configured.split(",")) {
+    const origin = rawOrigin.trim();
+    if (!origin || origin.includes("*")) {
+      throw new Error(`${TRUSTED_ORIGINS_ENV} must be a comma-separated list of exact HTTPS origins`);
+    }
+    let url;
+    try {
+      url = new URL(origin);
+    } catch {
+      throw new Error(`${TRUSTED_ORIGINS_ENV} must contain valid HTTPS origins`);
+    }
+    if (
+      url.protocol !== "https:"
+      || url.username
+      || url.password
+      || url.pathname !== "/"
+      || url.search
+      || url.hash
+    ) {
+      throw new Error(`${TRUSTED_ORIGINS_ENV} must contain exact HTTPS origins without paths, queries, fragments, or credentials`);
+    }
+    if (origins.has(url.origin)) {
+      throw new Error(`${TRUSTED_ORIGINS_ENV} must not contain duplicate origins`);
+    }
+    origins.add(url.origin);
+  }
+  return origins;
+}
+
+function assertTrustedNetworkRequest(request, allowOpaqueOrigin = false, trustedOrigins = new Set()) {
   let host;
   try {
     host = new URL(`http://${request.headers.host ?? ""}`).hostname;
@@ -177,6 +215,7 @@ function assertTrustedNetworkRequest(request, allowOpaqueOrigin = false) {
   if (!origin) return;
   if (TRUSTED_EMBED_ORIGINS.has(origin)) return;
   if (allowOpaqueOrigin && origin === "null") return;
+  if (trustedOrigins.has(origin)) return;
   let originHost;
   try {
     originHost = new URL(origin).hostname;
@@ -821,6 +860,28 @@ function parseTaskFilters(searchParams) {
   }
   const projectId = projectIdValue === null ? undefined : validateProjectId(projectIdValue);
   return { projectId, status: statusValue ?? undefined, archived };
+}
+
+function parseTaskTreeQuery(searchParams) {
+  const allowed = new Set(["direction", "depth"]);
+  for (const key of searchParams.keys()) {
+    if (!allowed.has(key)) {
+      throw new ApiError(400, "UNKNOWN_QUERY_PARAMETER", `Unknown query parameter '${key}'`);
+    }
+    if (searchParams.getAll(key).length !== 1) {
+      throw new ApiError(400, "INVALID_TREE_QUERY", `Query parameter '${key}' cannot be repeated`);
+    }
+  }
+  const direction = searchParams.get("direction");
+  if (direction !== "descendants" && direction !== "ancestors") {
+    throw new ApiError(400, "INVALID_TREE_QUERY", "'direction' must be descendants or ancestors");
+  }
+  const rawDepth = searchParams.get("depth");
+  const depth = Number(rawDepth);
+  if (!/^\d+$/.test(rawDepth ?? "") || !Number.isSafeInteger(depth) || depth < 1 || depth > 25) {
+    throw new ApiError(400, "INVALID_TREE_QUERY", "'depth' must be an integer from 1 to 25");
+  }
+  return { direction, depth };
 }
 
 function parseAiSandbox(value) {
@@ -1526,19 +1587,20 @@ async function scanDevelopmentContexts(workspacePath, processEnv = process.env) 
 }
 
 export function resolveServerOptions(options = {}) {
-  const configuredDataDirectory = options.dataDirectory ?? process.env.CODEX_TASKBOARD_DATA_DIR;
+  const environment = options.processEnv ?? process.env;
+  const configuredDataDirectory = options.dataDirectory ?? environment.CODEX_TASKBOARD_DATA_DIR;
   const dataDirectory = configuredDataDirectory
     ? path.resolve(configuredDataDirectory)
     : path.join(PROJECT_ROOT, ".data");
   const codexHome = process.env.CODEX_HOME || path.join(os.homedir(), ".codex");
   const instanceToken = String(
-    options.instanceToken ?? process.env.CODEX_TASKBOARD_INSTANCE_TOKEN ?? "",
+    options.instanceToken ?? environment.CODEX_TASKBOARD_INSTANCE_TOKEN ?? "",
   ).trim();
   if (instanceToken && !/^[a-z0-9-]{16,128}$/i.test(instanceToken)) {
     throw new Error("CODEX_TASKBOARD_INSTANCE_TOKEN must be an identifier");
   }
   const instanceSecret = String(
-    options.instanceSecret ?? process.env.CODEX_TASKBOARD_INSTANCE_SECRET ?? "",
+    options.instanceSecret ?? environment.CODEX_TASKBOARD_INSTANCE_SECRET ?? "",
   ).trim();
   if (instanceToken && !/^[a-f0-9-]{32,128}$/i.test(instanceSecret)) {
     throw new Error("CODEX_TASKBOARD_INSTANCE_SECRET must be set in launcher mode");
@@ -1552,7 +1614,7 @@ export function resolveServerOptions(options = {}) {
     clientStoragePath: options.clientStoragePath ?? path.join(dataDirectory, "client-storage.json"),
     staticDirectory: options.staticDirectory ?? path.join(PROJECT_ROOT, "dist", "web"),
     skillPath: options.skillPath
-      ?? process.env.CODEX_TASKBOARD_SKILL_PATH
+      ?? environment.CODEX_TASKBOARD_SKILL_PATH
       ?? path.join(PROJECT_ROOT, "skills", "manage-taskboard", "SKILL.md"),
     codexExecutable: resolveCodexExecutable({ explicit: options.codexExecutable }),
     codexStatePath: options.codexStatePath
@@ -1561,8 +1623,9 @@ export function resolveServerOptions(options = {}) {
       ?? path.join(codexHome, "process_manager", "chat_processes.json"),
     instanceToken,
     instanceSecret,
+    trustedOrigins: parseTrustedOrigins(environment[TRUSTED_ORIGINS_ENV]),
     version: String(
-      options.version ?? process.env.CODEX_TASKBOARD_VERSION ?? "development",
+      options.version ?? environment.CODEX_TASKBOARD_VERSION ?? "development",
     ).trim(),
   };
 }
@@ -1924,7 +1987,11 @@ export function createTaskboardServer(options = {}) {
         request.url = `${incomingUrl.pathname.slice(routePrefix.length) || "/"}${incomingUrl.search}`;
       }
 
-      assertTrustedNetworkRequest(request, Boolean(resolved.instanceToken));
+      assertTrustedNetworkRequest(
+        request,
+        Boolean(resolved.instanceToken),
+        resolved.trustedOrigins,
+      );
       const origin = request.headers.origin;
       const trustedEmbedOrigin = TRUSTED_EMBED_ORIGINS.has(origin)
         || (Boolean(resolved.instanceToken) && origin === "null");
@@ -1956,7 +2023,23 @@ export function createTaskboardServer(options = {}) {
       }
       const url = new URL(request.url, "http://127.0.0.1");
       const pathname = url.pathname;
+      const configuredTrustedOrigin = resolved.trustedOrigins.has(origin);
       const isLocalAiRoute = pathname === "/api/local/ai" || pathname.startsWith("/api/local/ai/");
+      const isDevelopmentContextsRoute = /^\/api\/projects\/[^/]+\/development-contexts$/.test(pathname);
+      if (
+        configuredTrustedOrigin
+        && (
+          pathname.startsWith("/api/local/")
+          || pathname === "/api/device-workspaces"
+          || isDevelopmentContextsRoute
+        )
+      ) {
+        throw new ApiError(
+          409,
+          "LOCAL_COMPANION_REQUIRED",
+          "This capability requires a device-local Taskboard origin",
+        );
+      }
       if (isLocalAiRoute) {
         assertAiLoopbackRequest(request);
       } else if (pathname.startsWith("/api/local/")) {
@@ -1964,7 +2047,7 @@ export function createTaskboardServer(options = {}) {
       }
       const isMachineCapabilityRoute = pathname === "/api/meta"
         || pathname === "/api/device-workspaces"
-        || /^\/api\/projects\/[^/]+\/development-contexts$/.test(pathname);
+        || isDevelopmentContextsRoute;
       const capabilityCloudConfig = isMachineCapabilityRoute
         ? await cloudConfig.read()
         : null;
@@ -2207,8 +2290,11 @@ export function createTaskboardServer(options = {}) {
           throw new ApiError(400, "UNKNOWN_QUERY_PARAMETER", "GET /api/meta does not accept query parameters");
         }
         return sendJson(response, 200, {
-          manageTaskboardSkillPath: resolved.skillPath,
-          capabilities: { localAiChat: isLoopbackAddress(request.socket.remoteAddress) },
+          ...(configuredTrustedOrigin ? {} : { manageTaskboardSkillPath: resolved.skillPath }),
+          capabilities: {
+            localAiChat: !configuredTrustedOrigin
+              && isLoopbackAddress(request.socket.remoteAddress),
+          },
           ...(capabilityCloudConfig?.remoteUrl
             ? {
               mode: "cloud",
@@ -2216,7 +2302,7 @@ export function createTaskboardServer(options = {}) {
                 transport: "websocket",
                 endpoint: "/api/events",
               },
-              localCapabilities: { available: true },
+              localCapabilities: { available: !configuredTrustedOrigin },
             }
             : {}),
         });
@@ -2935,6 +3021,22 @@ export function createTaskboardServer(options = {}) {
         return sendEmpty(response, 204);
       }
 
+      const taskTreeRoute = pathname.match(/^\/api\/tasks\/([^/]+)\/tree$/);
+      if (taskTreeRoute) {
+        let id;
+        try {
+          id = decodeURIComponent(taskTreeRoute[1]);
+        } catch {
+          throw new ApiError(400, "INVALID_PATH", "Task id contains invalid encoding");
+        }
+        if (id.length === 0 || id.length > 128) {
+          throw new ApiError(400, "INVALID_PATH", "Task id is invalid");
+        }
+        if (request.method !== "GET") return methodNotAllowed(response, ["GET"]);
+        const { direction, depth } = parseTaskTreeQuery(url.searchParams);
+        return sendJson(response, 200, { tree: database.getTaskTree(id, direction, depth) });
+      }
+
       const taskRoute = pathname.match(/^\/api\/tasks\/([^/]+)(?:\/(archive|restore|move))?$/);
       if (taskRoute) {
         let id;
@@ -3171,7 +3273,11 @@ export function createTaskboardServer(options = {}) {
         }
         request.url = `${incomingUrl.pathname.slice(routePrefix.length) || "/"}${incomingUrl.search}`;
       }
-      assertTrustedNetworkRequest(request, Boolean(resolved.instanceToken));
+      assertTrustedNetworkRequest(
+        request,
+        Boolean(resolved.instanceToken),
+        resolved.trustedOrigins,
+      );
       const url = new URL(request.url, "http://127.0.0.1");
       if (url.pathname !== "/api/events" || [...url.searchParams.keys()].length > 0) {
         rejectWebSocketUpgrade(socket, 404, "Not Found");
