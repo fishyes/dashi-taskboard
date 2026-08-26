@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import path from "node:path";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 
 import {
   buildTaskboardAutomationName,
@@ -162,6 +164,8 @@ test("the stable name and generated prompt are project-scoped and encode the cla
   assert.match(prompt, /--binding-thread-id "\$CODEX_THREAD_ID"/);
   assert.match(prompt, /認領後的每一次 issue move.*五個完整 binding 欄位/);
   assert.match(prompt, /不要省略 binding，避免將完整綁定降級為 legacy local/);
+  assert.doesNotMatch(prompt, /automation_update/);
+  assert.match(prompt, /Taskboard 主機端會暫停目前的自動化/);
 });
 
 test("the remote automation prompt keeps taskctl local and delegates work to the SSH project", () => {
@@ -200,15 +204,17 @@ test("the remote automation prompt keeps taskctl local and delegates work to the
   assert.match(prompt, /移動到 in_review/);
 });
 
-test("the generated automation command uses an argv runtime file instead of an env assignment", () => {
+test("the generated automation command uses the packaged CLI and an argv runtime file", () => {
   const previous = process.env.CODEX_TASKBOARD_RUNTIME_FILE;
   const runtimeFile = "/Users/example/Library/Application Support/Codex Taskboard/launcher-runtime.json";
   process.env.CODEX_TASKBOARD_RUNTIME_FILE = runtimeFile;
   try {
     const prompt = buildTaskboardAutomationPrompt(baseRequest);
-    // Windows 上 process.execPath 是完整路徑且 cliPath 為反斜線，路徑斷言保持跨平台。
-    assert.match(prompt, /taskctl\.mjs'\s+--runtime-file\s+'[^']+launcher-runtime\.json'/);
-    assert.ok(prompt.includes(`--runtime-file '${runtimeFile}'`));
+    const cliPath = fileURLToPath(new URL("../cli/taskctl.mjs", import.meta.url));
+    assert.ok(prompt.includes(
+      `'${process.execPath}' '${cliPath}' --runtime-file '${process.env.CODEX_TASKBOARD_RUNTIME_FILE}'`,
+    ));
+    assert.ok(!prompt.includes(path.resolve(path.dirname(baseRequest.skillPath), "../..", "cli/taskctl.mjs")));
     assert.doesNotMatch(prompt, /CODEX_TASKBOARD_RUNTIME_FILE=/);
   } finally {
     if (previous === undefined) {
@@ -297,6 +303,13 @@ test("passive policy checks resume only after quota recovery", () => {
       { ...passiveAvailable, currentStatus: "ACTIVE" },
     ),
     "ensure-active",
+  );
+  assert.equal(
+    taskboardAutomationPolicyOperation(
+      { ...baseRequest, quotaAware: false },
+      { ...passiveAvailable, currentStatus: "ACTIVE", hasTodo: false },
+    ),
+    "pause",
   );
 });
 

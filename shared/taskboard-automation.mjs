@@ -1,4 +1,7 @@
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const taskctlCliPath = fileURLToPath(new URL("../cli/taskctl.mjs", import.meta.url));
 
 const AUTOMATION_OPERATIONS = new Set(["ensure-active", "pause", "list", "apply-policy"]);
 const INTERVAL_MINUTES = new Set([5, 10, 15, 30, 60]);
@@ -90,7 +93,6 @@ export function buildTaskboardAutomationName(request) {
 }
 
 export function buildTaskboardAutomationPrompt(request) {
-  const automationName = buildTaskboardAutomationName(request);
   const taskctlCommand = buildTaskctlCommand(request);
   const remoteProject = request.codexProjectKind === "remote";
   const remoteProjects = request.remoteProjects ?? [];
@@ -123,15 +125,14 @@ export function buildTaskboardAutomationPrompt(request) {
   return [
     `[$manage-taskboard](${request.skillPath}) e-taskboard 每 ${request.intervalMinutes} 分鐘檢查任務面板中的「${request.projectName}」專案（專案 ID：${request.taskboardProjectId}，專案目錄：${request.workspacePath}）。`,
     `本輪所有 taskctl 操作都使用完整命令字首 ${taskctlCommand}，不要使用 PATH 中的 taskctl。`,
-    `開始時先執行 ${taskctlCommand} issue list --project ${request.taskboardProjectId} --status todo --json。若沒有 todo，使用 Codex automation_update 將名為「${automationName}」的目前自動化設為 PAUSED，保留其他欄位，然後結束；不要建立或開啟新的任務會話。`,
+    `開始時先執行 ${taskctlCommand} issue list --project ${request.taskboardProjectId} --status todo --json。若沒有 todo，直接結束；Taskboard 主機端會暫停目前的自動化，不要建立或開啟新的任務會話。`,
     ...executionInstructions,
-    `本次處理或交接後，再次執行 ${taskctlCommand} issue list --project ${request.taskboardProjectId} --status todo --json。若沒有 todo，使用 Codex automation_update 將名為「${automationName}」的目前自動化設為 PAUSED，保留其他欄位，避免後續建立空會話。`,
+    `本次處理或交接後，再次執行 ${taskctlCommand} issue list --project ${request.taskboardProjectId} --status todo --json。若沒有 todo，直接結束；Taskboard 主機端會暫停目前的自動化，避免後續建立空會話。`,
   ].join("\n");
 }
 
 function buildTaskctlCommand(request) {
-  const cliPath = path.resolve(path.dirname(request.skillPath), "../..", "cli/taskctl.mjs");
-  const command = `${shellQuote(process.execPath)} ${shellQuote(cliPath)}`;
+  const command = `${shellQuote(process.execPath)} ${shellQuote(taskctlCliPath)}`;
   const runtimeFilePath = process.env.CODEX_TASKBOARD_RUNTIME_FILE;
   return runtimeFilePath
     ? `${command} --runtime-file ${shellQuote(runtimeFilePath)}`
@@ -158,11 +159,13 @@ export function buildTaskboardAutomationSpec(request) {
 
 export function taskboardAutomationPolicyOperation(request, {
   explicit,
+  hasTodo,
   previousQuotaState,
   quotaState,
   currentStatus,
 }) {
   if (!request.enabledByUser) return "pause";
+  if (hasTodo === false) return "pause";
   if (
     !explicit
     && currentStatus === "PAUSED"

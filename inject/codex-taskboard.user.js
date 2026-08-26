@@ -35,8 +35,8 @@
     "新增任務",
     "新建任务",
     "新對話",
-    "新对话",
     "新聊天",
+    "新对话",
     "new task",
     "new chat",
     "拉取請求",
@@ -1814,6 +1814,10 @@
     if (!clickable.closest("aside nav[role='navigation']")) return false;
     if (clickable.hasAttribute("data-app-action-sidebar-section-toggle")) return false;
     if (buttonMatches(clickable, NATIVE_PAGE_LABELS)) return true;
+    if (
+      clickable.matches("[role='button']")
+      && clickable.closest("[data-sidebar-chatgpt-conversation-key]")
+    ) return true;
     return Boolean(clickable.closest(
       "[data-app-action-sidebar-thread-id],"
       + "[data-app-action-sidebar-project-row],"

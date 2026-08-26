@@ -434,12 +434,17 @@ export function DashboardView({
         `Across all projects, ${tasks.length} issues are tracked: ${completedTasks.length} completed and ${activeTasks.length} still open; ${tasks.filter((task) => task.status === "blocked").length} are blocked and ${overdueTasks.length} overdue.`,
       )
     : projectSummary?.summary
-      ?? (summaryLoadFailed || projectSummary?.error
-        ? text("Codex 暫時無法產生專案總結。", "Codex cannot generate the project summary now.")
-        : text(
+      ?? (projectSummary?.refreshing
+        ? text(
             "Codex 正在整理目前專案的進展、風險和下一步重點…",
             "Codex is reviewing the project's progress, risks, and next steps…",
-          ));
+          )
+        : summaryLoadFailed || projectSummary?.error
+          ? text("Codex 暫時無法產生專案總結。", "Codex cannot generate the project summary now.")
+          : text(
+              "Codex 正在整理目前專案的進展、風險和下一步重點…",
+              "Codex is reviewing the project's progress, risks, and next steps…",
+            ));
   const hour = new Date().getHours();
   const greeting = hour < 12
     ? text("上午好", "Good morning")
