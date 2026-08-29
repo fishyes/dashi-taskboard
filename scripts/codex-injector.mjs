@@ -90,6 +90,7 @@ const hostRequestMessage = "__codexTaskboardHostRequestV1";
 const hostResponseMessage = "__codexTaskboardHostResponseV1";
 const hostHeartbeatMessage = "__codexTaskboardHostHeartbeatV1";
 const hostStartupTokenName = "__codexTaskboardHostStartupTokenV1";
+const codexNotificationBindingName = "__codexTaskboardCodexNotificationV1";
 const hostCapability = randomUUID();
 const injectionSourceHashName = "__CODEX_TASKBOARD_SOURCE_HASH__";
 const injectionScriptIdentifierName = "__CODEX_TASKBOARD_SCRIPT_IDENTIFIER__";
@@ -111,9 +112,11 @@ const quotaPolicyCdps = new Set();
 const restoredQuotaPolicyCdps = new WeakSet();
 const quotaPolicyRestorePromises = new WeakMap();
 const taskboardProxyCdps = new WeakSet();
+const remoteAutomationDecisionWaiters = new Map();
 let quotaPoliciesLoadPromise = null;
 let quotaPoliciesWritePromise = Promise.resolve();
 const taskConversationAppServerTimeoutMs = 30_000;
+const remoteAutomationTurnTimeoutMs = 30 * 60_000;
 
 function parseArgs(argv) {
   const options = {
@@ -224,18 +227,42 @@ async function waitUntilTaskboardReachable(timeoutMs) {
   throw new Error(`Timed out waiting for authenticated ${taskboardHealthUrl}`);
 }
 
-function startTaskboard({ detached }) {
-  const stdio = taskboardListenFd === null
-    ? (detached ? "ignore" : "inherit")
+function startTaskboard({ detached, onCodexAppServerRequest }) {
+  const baseStdio = taskboardListenFd === null
+    ? Array(3).fill(detached ? "ignore" : "inherit")
     : Array.from(
       { length: taskboardListenFd + 1 },
       (_, fd) => (fd === taskboardListenFd ? "inherit" : (fd < 3 && !detached ? "inherit" : "ignore")),
     );
-  return spawn(process.execPath, [path.join(projectRoot, "server", "index.mjs")], {
+  const child = spawn(process.execPath, [path.join(projectRoot, "server", "index.mjs")], {
     cwd: projectRoot,
     detached,
-    stdio,
+    stdio: [...baseStdio, "ipc"],
   });
+  child.on("message", (message) => {
+    if (message?.type !== "taskboard:codex-app-server-request") return;
+    void Promise.resolve(onCodexAppServerRequest(message)).then(
+      (result) => {
+        if (!child.connected) return;
+        child.send({
+          type: "taskboard:codex-app-server-response",
+          requestId: message.requestId,
+          hostId: message.hostId,
+          result,
+        });
+      },
+      (error) => {
+        if (!child.connected) return;
+        child.send({
+          type: "taskboard:codex-app-server-response",
+          requestId: message.requestId,
+          hostId: message.hostId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      },
+    );
+  });
+  return child;
 }
 
 async function publishTaskboardRuntime() {
@@ -1343,11 +1370,477 @@ async function requestCodexAppServerViaCdp(
   return response.result;
 }
 
+async function taskboardRequest(pathname, { method = "GET", body } = {}) {
+  const response = await fetch(`${taskboardBaseUrl}${pathname}`, {
+    method,
+    cache: "no-store",
+    headers: {
+      accept: "application/json",
+      "x-taskboard-client": "taskctl",
+      ...(body === undefined ? {} : { "content-type": "application/json" }),
+    },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+  const text = await response.text();
+  let payload = {};
+  if (text) {
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      throw new Error(`Taskboard returned invalid JSON for ${method} ${pathname}`);
+    }
+  }
+  if (!response.ok) {
+    throw new Error(
+      payload?.error?.message || `Taskboard returned HTTP ${response.status} for ${method} ${pathname}`,
+    );
+  }
+  return payload;
+}
+
+function normalizeRemoteWorkspace(value) {
+  const workspacePath = String(value || "").trim().replaceAll("\\", "/").replace(/\/+$/, "");
+  return /^[A-Za-z]:/.test(workspacePath)
+    ? `${workspacePath[0].toLowerCase()}${workspacePath.slice(1)}`
+    : workspacePath;
+}
+
+function remoteAutomationTarget(request, task) {
+  const workspacePath = task.developmentContext?.type === "worktree"
+    ? task.developmentContext.path
+    : request.workspacePath;
+  const matches = (request.remoteProjects ?? []).filter((project) => (
+    project.codexProjectKind === "remote"
+    && project.codexHostId === request.codexHostId
+    && normalizeRemoteWorkspace(project.workspacePath) === normalizeRemoteWorkspace(workspacePath)
+    && (
+      task.developmentContext?.type === "worktree"
+      || project.codexProjectId === request.codexProjectId
+    )
+  ));
+  return matches.length === 1 ? matches[0] : null;
+}
+
+function eligibleRemoteAutomationTask(task) {
+  const remoteBinding = task?.threadBinding?.codexProjectKind === "remote"
+    && task.threadId === task.threadBinding.threadId;
+  return task?.status === "todo"
+    && task.archivedAt === null
+    && ((!task.threadId && !task.threadBinding) || remoteBinding)
+    && (task.relations?.blockedBy ?? []).every((dependency) => dependency.status === "done");
+}
+
+function remoteAutomationSnapshot(task, comments, attachments) {
+  return JSON.stringify({
+    task: {
+      version: task.version,
+      projectId: task.projectId,
+      title: task.title,
+      description: task.description,
+      developmentContext: task.developmentContext,
+      blockedBy: (task.relations?.blockedBy ?? []).map((dependency) => [
+        dependency.id,
+        dependency.status,
+      ]),
+    },
+    comments: comments.map((comment) => [
+      comment.id,
+      comment.version,
+      comment.body,
+      (comment.attachments ?? []).map((attachment) => [
+        attachment.id,
+        attachment.filename,
+        attachment.contentType,
+        attachment.size,
+      ]),
+    ]),
+    attachments: attachments.map((attachment) => [
+      attachment.id,
+      attachment.filename,
+      attachment.contentType,
+      attachment.size,
+    ]),
+  });
+}
+
+function remoteAutomationPrompt(task, comments, attachments, target) {
+  const commentText = comments.length > 0
+    ? comments.map((comment) => (
+      `- ${comment.authorName} (${comment.createdAt}):\n${comment.body}`
+    )).join("\n\n")
+    : "（無）";
+  const attachmentItems = [
+    ...attachments,
+    ...comments.flatMap((comment) => comment.attachments ?? []),
+  ];
+  const attachmentText = attachmentItems.length > 0
+    ? attachmentItems.map((attachment) => (
+      `- ${attachment.filename} (${attachment.contentType}, ${attachment.size} bytes)`
+    )).join("\n")
+    : "（無）";
+  const developmentContext = task.developmentContext
+    ? JSON.stringify(task.developmentContext)
+    : "（專案根目錄）";
+  return [
+    `處理 Taskboard 議題 ${task.identifier}：${task.title}`,
+    "",
+    `遠端工作目錄：${target.workspacePath}`,
+    `開發上下文：${developmentContext}`,
+    "",
+    "完整描述：",
+    task.description || "（無）",
+    "",
+    "全部評論：",
+    commentText,
+    "",
+    "附件：",
+    attachmentText,
+    "",
+    "你只負責在目前遠端專案和工作目錄內完成實作與直接驗證。不要執行 taskctl，也不要存取或修改 Taskboard。完成後回傳改動、驗證結果、執行結果和剩餘限制。",
+  ].join("\n");
+}
+
+function waitForRemoteAutomationDecision(hostId, threadId) {
+  const key = `${hostId}\0${threadId}`;
+  let cancel;
+  const promise = new Promise((resolve, reject) => {
+    const finish = (error, answer) => {
+      clearTimeout(timer);
+      remoteAutomationDecisionWaiters.delete(key);
+      if (error) reject(error);
+      else resolve(answer);
+    };
+    const timer = setTimeout(
+      () => finish(new Error("Codex 自動認領判斷逾時")),
+      remoteAutomationTurnTimeoutMs,
+    );
+    timer.unref();
+    remoteAutomationDecisionWaiters.set(key, { finish });
+    cancel = () => {
+      clearTimeout(timer);
+      remoteAutomationDecisionWaiters.delete(key);
+    };
+  });
+  return { promise, cancel };
+}
+
+function handleRemoteAutomationDecisionNotification(notification) {
+  const params = notification.params;
+  const waiter = remoteAutomationDecisionWaiters.get(
+    `${notification.hostId}\0${params?.threadId}`,
+  );
+  if (!waiter) return;
+  if (notification.method !== "turn/completed") return;
+  if (params.turn?.status !== "completed") {
+    waiter.finish(new Error(params.turn?.error?.message || "Codex 自動認領判斷失敗"));
+    return;
+  }
+  const answer = [...params.turn.items].reverse()
+    .find((item) => item.type === "agentMessage")?.text?.trim() || "";
+  waiter.finish(null, answer);
+}
+
+async function remoteAutomationCanStart(cdp, request, task, comments) {
+  const latestComment = comments.at(-1);
+  const started = await requestCodexAppServerViaCdp(
+    cdp,
+    undefined,
+    request.codexHostId,
+    "thread/start",
+    {
+      ephemeral: true,
+      model: request.model,
+      cwd: request.workspacePath,
+      runtimeWorkspaceRoots: [request.workspacePath],
+      approvalPolicy: "never",
+      sandbox: "read-only",
+    },
+  );
+  const threadId = started?.thread?.id;
+  if (typeof threadId !== "string" || !threadId || started.thread.ephemeral !== true) {
+    throw new Error("Codex 未建立臨時自動認領判斷執行緒");
+  }
+
+  const completion = waitForRemoteAutomationDecision(request.codexHostId, threadId);
+  let turnStarted;
+  try {
+    turnStarted = await requestCodexAppServerViaCdp(
+      cdp,
+      undefined,
+      request.codexHostId,
+      "turn/start",
+      {
+        threadId,
+        input: [{
+          type: "text",
+          text: [
+            "你是 Codex Taskboard 自動認領 Agent。只判斷下列議題目前是否允許開始。",
+            "根據完整描述和最新評論進行語意判斷：若任一處明確要求等待、暫不執行或目前不應開始，decision 為 wait；否則 decision 為 start。不要呼叫工具，不要解釋。",
+            JSON.stringify({
+              identifier: task.identifier,
+              title: task.title,
+              description: task.description,
+              latestComment: latestComment
+                ? {
+                    authorName: latestComment.authorName,
+                    createdAt: latestComment.createdAt,
+                    body: latestComment.body,
+                  }
+                : null,
+            }),
+          ].join("\n\n"),
+        }],
+        effort: request.reasoningEffort,
+        outputSchema: {
+          type: "object",
+          properties: {
+            decision: { type: "string", enum: ["start", "wait"] },
+          },
+          required: ["decision"],
+          additionalProperties: false,
+        },
+      },
+    );
+  } catch (error) {
+    completion.cancel();
+    throw error;
+  }
+  const turnId = turnStarted?.turn?.id;
+  if (typeof turnId !== "string" || !turnId) {
+    completion.cancel();
+    throw new Error("Codex 未回傳自動認領判斷 turn");
+  }
+  const answer = await completion.promise;
+  let decision;
+  try {
+    decision = JSON.parse(answer).decision;
+  } catch {}
+  if (decision !== "start" && decision !== "wait") {
+    throw new Error("Codex 未回傳有效的自動認領判斷");
+  }
+  return decision === "start";
+}
+
+async function runRemoteTaskboardAutomation(record) {
+  const { request, version } = record;
+  if (
+    !request.enabledByUser
+    || request.codexProjectKind !== "remote"
+    || quotaPolicyRecords.get(request.taskboardProjectId)?.version !== version
+  ) return;
+
+  const listed = await taskboardRequest(
+    `/api/tasks?projectId=${encodeURIComponent(request.taskboardProjectId)}&status=todo`,
+  );
+  const listedTask = listed.tasks?.find(eligibleRemoteAutomationTask);
+  if (!listedTask) return;
+
+  const taskPath = `/api/tasks/${encodeURIComponent(listedTask.id)}`;
+  const commentsPath = `${taskPath}/comments`;
+  const attachmentsPath = `${taskPath}/attachments`;
+  const [{ task }, { comments }, { attachments }] = await Promise.all([
+    taskboardRequest(taskPath),
+    taskboardRequest(commentsPath),
+    taskboardRequest(attachmentsPath),
+  ]);
+  if (!eligibleRemoteAutomationTask(task) || task.projectId !== request.taskboardProjectId) return;
+  const cdp = currentQuotaPolicyCdp();
+  if (!(await remoteAutomationCanStart(cdp, request, task, comments))) return;
+  const existingBinding = task.threadBinding?.codexProjectKind === "remote"
+    ? task.threadBinding
+    : null;
+  const target = existingBinding ?? remoteAutomationTarget(request, task);
+  if (!target) {
+    await taskboardRequest(commentsPath, {
+      method: "POST",
+      body: { body: "自動認領未開始：目標 SSH 工作目錄沒有唯一的已登記 Codex 專案對應。" },
+    });
+    return;
+  }
+  const snapshot = remoteAutomationSnapshot(task, comments, attachments);
+  const started = await requestCodexAppServerViaCdp(
+    cdp,
+    undefined,
+    target.codexHostId,
+    existingBinding ? "thread/resume" : "thread/start",
+    {
+      ...(existingBinding ? { threadId: existingBinding.threadId } : {}),
+      model: request.model,
+      cwd: target.workspacePath,
+      runtimeWorkspaceRoots: [target.workspacePath],
+      approvalPolicy: "never",
+      sandbox: "danger-full-access",
+    },
+  );
+  const threadId = started?.thread?.id;
+  if (
+    typeof threadId !== "string"
+    || !threadId
+    || normalizeRemoteWorkspace(started.thread.cwd) !== normalizeRemoteWorkspace(target.workspacePath)
+  ) {
+    throw new Error(`Codex did not ${existingBinding ? "resume" : "create"} the automation thread in the selected SSH workspace`);
+  }
+
+  const refreshed = await Promise.all([
+    taskboardRequest(taskPath),
+    taskboardRequest(commentsPath),
+    taskboardRequest(attachmentsPath),
+  ]);
+  const refreshedTask = refreshed[0].task;
+  const refreshedComments = refreshed[1].comments;
+  const refreshedAttachments = refreshed[2].attachments;
+  const refreshedTarget = refreshedTask.threadBinding?.codexProjectKind === "remote"
+    ? refreshedTask.threadBinding
+    : remoteAutomationTarget(request, refreshedTask);
+  if (
+    !eligibleRemoteAutomationTask(refreshedTask)
+    || remoteAutomationSnapshot(refreshedTask, refreshedComments, refreshedAttachments) !== snapshot
+    || refreshedTarget?.codexProjectId !== target.codexProjectId
+    || refreshedTarget?.codexProjectKind !== target.codexProjectKind
+    || refreshedTarget?.codexHostId !== target.codexHostId
+    || refreshedTarget?.workspacePath !== target.workspacePath
+    || refreshedTarget?.threadId !== target.threadId
+  ) return;
+
+  const threadBinding = existingBinding ?? {
+    threadId,
+    codexProjectId: target.codexProjectId,
+    codexProjectKind: "remote",
+    codexHostId: target.codexHostId,
+    workspacePath: target.workspacePath,
+  };
+  let ownedTask = (
+    await taskboardRequest(`${taskPath}/move`, {
+      method: "POST",
+      body: {
+        version: refreshedTask.version,
+        status: "in_progress",
+        threadId,
+        threadBinding,
+      },
+    })
+  ).task;
+
+  try {
+    const turnStarted = await requestCodexAppServerViaCdp(
+      cdp,
+      undefined,
+      target.codexHostId,
+      "turn/start",
+      {
+        threadId,
+        input: [{
+          type: "text",
+          text: remoteAutomationPrompt(
+            refreshedTask,
+            refreshedComments,
+            refreshedAttachments,
+            target,
+          ),
+        }],
+        effort: request.reasoningEffort,
+      },
+    );
+    const turnId = turnStarted?.turn?.id;
+    if (typeof turnId !== "string" || !turnId) {
+      throw new Error("Codex did not return the remote automation turn id");
+    }
+
+    const deadline = Date.now() + remoteAutomationTurnTimeoutMs;
+    let finalText = "";
+    while (Date.now() < deadline) {
+      let read;
+      try {
+        read = await requestCodexAppServerViaCdp(
+          cdp,
+          undefined,
+          target.codexHostId,
+          "thread/read",
+          { threadId, includeTurns: true },
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (!message.includes("rollout") || !message.includes("is empty")) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 1_000));
+        continue;
+      }
+      const turn = read?.thread?.turns?.find((candidate) => candidate.id === turnId);
+      if (turn?.status === "completed") {
+        finalText = [...turn.items].reverse().find((item) => item.type === "agentMessage")?.text?.trim() || "";
+        if (!finalText) throw new Error("Codex completed without a final result");
+        break;
+      }
+      if (turn?.status === "failed" || turn?.status === "interrupted") {
+        throw new Error(turn.error?.message || `Codex remote turn ${turn.status}`);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1_000));
+    }
+    if (!finalText) throw new Error("Codex remote automation turn timed out");
+
+    await taskboardRequest(commentsPath, {
+      method: "POST",
+      body: {
+        body: [
+          "自動認領遠端執行完成。",
+          `- Codex host：${target.codexHostId}`,
+          `- 遠端目錄：${target.workspacePath}`,
+          `- 遠端 thread：${threadId}`,
+          "",
+          finalText,
+        ].join("\n").slice(0, 100_000),
+        threadId,
+        threadBinding,
+      },
+    });
+    ownedTask = (
+      await taskboardRequest(`${taskPath}/move`, {
+        method: "POST",
+        body: {
+          version: ownedTask.version,
+          status: "in_review",
+          threadId,
+          threadBinding,
+        },
+      })
+    ).task;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await taskboardRequest(commentsPath, {
+      method: "POST",
+      body: {
+        body: `自動認領遠端執行失敗：${message}`.slice(0, 100_000),
+        threadId,
+        threadBinding,
+      },
+    });
+    await taskboardRequest(`${taskPath}/move`, {
+      method: "POST",
+      body: {
+        version: ownedTask.version,
+        status: "blocked",
+        threadId,
+        threadBinding,
+      },
+    });
+  }
+}
+
+function remoteAutomationItem(request, status, nextRunAt) {
+  return {
+    id: request.automationId || `taskboard-${request.taskboardProjectId}`,
+    status,
+    model: request.model,
+    reasoningEffort: request.reasoningEffort,
+    rrule: `RRULE:FREQ=MINUTELY;INTERVAL=${request.intervalMinutes}`,
+    nextRunAt: status === "ACTIVE" ? nextRunAt : null,
+  };
+}
+
 async function applyTaskboardAutomationPolicy(
   request,
   rpc,
   stillCurrent = () => true,
-  { explicit = false, previousQuotaState } = {},
+  { explicit = false, previousQuotaState, remoteNextRunAt } = {},
 ) {
   const todoResponse = request.enabledByUser
     ? await fetch(
@@ -1367,6 +1860,39 @@ async function applyTaskboardAutomationPolicy(
     ? await readCodexQuotaStatus(request.model)
     : null;
   if (!stillCurrent()) return { quota, stale: true };
+  if (request.codexProjectKind === "remote") {
+    const currentStatus = request.enabledByUser
+      && (!request.quotaAware || previousQuotaState === "available")
+      ? "ACTIVE"
+      : "PAUSED";
+    const currentItem = remoteAutomationItem(request, currentStatus, remoteNextRunAt);
+    const operation = taskboardAutomationPolicyOperation(request, {
+      explicit,
+      hasTodo,
+      previousQuotaState,
+      quotaState: quota?.state,
+      currentStatus,
+    });
+    const status = operation === "pause" ? "PAUSED" : "ACTIVE";
+    const existingNextRunAt = Number(remoteNextRunAt);
+    const nextRunAt = status === "ACTIVE"
+      ? (
+        Number.isFinite(existingNextRunAt) && existingNextRunAt > Date.now()
+          ? existingNextRunAt
+          : Date.now() + request.intervalMinutes * 60_000
+      )
+      : null;
+    const item = operation === "list"
+      ? currentItem
+      : remoteAutomationItem(request, status, nextRunAt);
+    return {
+      item,
+      items: [item],
+      operation,
+      hasTodo,
+      ...(quota ? { quota } : {}),
+    };
+  }
   let listed = null;
   let currentItem;
   if (!explicit && request.enabledByUser) {
@@ -1415,7 +1941,7 @@ function storedAutomationPolicy(request) {
 
 function restoredAutomationPolicy(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const { quota, ...stored } = value;
+  const { nextRunAt, quota, ...stored } = value;
   const request = parseTaskboardAutomationHostRequest({
     ...stored,
     id: "restored-policy",
@@ -1423,7 +1949,13 @@ function restoredAutomationPolicy(value) {
     requestId: "restored-policy",
     operation: "apply-policy",
   });
-  return request ? { request, ...(quota ? { quota } : {}) } : null;
+  return request
+    ? {
+      request,
+      ...(quota ? { quota } : {}),
+      ...(Number.isFinite(nextRunAt) ? { nextRunAt } : {}),
+    }
+    : null;
 }
 
 async function ensureQuotaPoliciesLoaded() {
@@ -1455,6 +1987,7 @@ function persistQuotaPolicies() {
       {
         ...storedAutomationPolicy(record.request),
         ...(record.quota ? { quota: record.quota } : {}),
+        ...(Number.isFinite(record.nextRunAt) ? { nextRunAt: record.nextRunAt } : {}),
       },
     ]),
   );
@@ -1497,7 +2030,10 @@ function scheduleQuotaPolicyCheck(record, result) {
 
   const nextRunAt = Number(result.item?.nextRunAt);
   const nextRunDelay = Number.isFinite(nextRunAt) && nextRunAt > Date.now()
-    ? Math.max(1_000, nextRunAt - Date.now() - 15_000)
+    ? Math.max(
+      1_000,
+      nextRunAt - Date.now() - (request.codexProjectKind === "remote" ? 0 : 15_000),
+    )
     : 60_000;
   const resetDelay = result.quota?.state === "blocked"
     && Number.isFinite(result.quota.resetsAt)
@@ -1506,6 +2042,9 @@ function scheduleQuotaPolicyCheck(record, result) {
   const timer = setTimeout(async () => {
     if (quotaPolicyRecords.get(key)?.version !== version) return;
     try {
+      if (request.codexProjectKind === "remote" && result.item?.status === "ACTIVE") {
+        await runRemoteTaskboardAutomation(record);
+      }
       await enqueueCurrentQuotaPolicy(key);
     } catch (error) {
       console.error(`Taskboard quota policy check failed: ${error.message}`);
@@ -1534,6 +2073,7 @@ function enqueueQuotaPolicyMutation(record, rpc, { explicit = false } = {}) {
         {
           explicit,
           previousQuotaState: current.quota?.state,
+          remoteNextRunAt: current.nextRunAt,
         },
       );
       if (result.stale) return result;
@@ -1546,6 +2086,14 @@ function enqueueQuotaPolicyMutation(record, rpc, { explicit = false } = {}) {
       }
       if (result.item?.id) {
         current.request = { ...current.request, automationId: result.item.id };
+      }
+      if (current.request.codexProjectKind === "remote") {
+        const nextRunAt = Number(result.item?.nextRunAt);
+        if (result.item?.status === "ACTIVE" && Number.isFinite(nextRunAt)) {
+          current.nextRunAt = nextRunAt;
+        } else {
+          delete current.nextRunAt;
+        }
       }
       if (current.request.quotaAware && result.quota) current.quota = result.quota;
       else if (!current.request.quotaAware) delete current.quota;
@@ -1879,13 +2427,30 @@ async function sendHostResponse(cdp, executionContextId, response) {
   });
 }
 
-function installTaskboardHostBinding(cdp, supervisor, startupToken) {
+function installTaskboardHostBinding(
+  cdp,
+  supervisor,
+  startupToken,
+  onCodexAppServerNotification,
+  onCodexAppServerReady,
+) {
   let activeContextId = null;
   let installInFlight = null;
 
   cdp.on("Runtime.bindingCalled", async (params) => {
-    if (params.name !== hostBindingName) return;
     if (params.executionContextId !== activeContextId) return;
+    if (params.name === codexNotificationBindingName) {
+      try {
+        const notification = JSON.parse(params.payload);
+        if (
+          notification
+          && typeof notification.hostId === "string"
+          && typeof notification.method === "string"
+        ) onCodexAppServerNotification(cdp, notification);
+      } catch {}
+      return;
+    }
+    if (params.name !== hostBindingName) return;
     await handleHostBindingPayload(params, {
       isAuthorizedContext: (executionContextId) => executionContextId === activeContextId,
       parseAutomationRequest: parseTaskboardAutomationHostRequest,
@@ -1910,7 +2475,11 @@ function installTaskboardHostBinding(cdp, supervisor, startupToken) {
               request,
               rpc,
             );
-            return stored ?? reconcileTaskboardAutomation(request, rpc);
+            return stored ?? (
+              request.codexProjectKind === "remote"
+                ? { items: [] }
+                : reconcileTaskboardAutomation(request, rpc)
+            );
           }
           return request.operation === "apply-policy"
             ? updateAndApplyQuotaPolicy(request, rpc)
@@ -1939,6 +2508,10 @@ function installTaskboardHostBinding(cdp, supervisor, startupToken) {
         name: hostBindingName,
         executionContextId: activeContextId,
       });
+      await cdp.send("Runtime.addBinding", {
+        name: codexNotificationBindingName,
+        executionContextId: activeContextId,
+      });
       await cdp.send("Runtime.evaluate", {
         contextId: activeContextId,
         expression: `(() => {
@@ -1948,10 +2521,24 @@ function installTaskboardHostBinding(cdp, supervisor, startupToken) {
           window.addEventListener("message", (event) => {
             const message = event.data;
             if (
+              !message
+              || typeof message !== "object"
+            ) return;
+            if (
+              message.type === "mcp-notification"
+              && typeof message.hostId === "string"
+              && typeof message.method === "string"
+            ) {
+              globalThis[${JSON.stringify(codexNotificationBindingName)}](JSON.stringify({
+                hostId: message.hostId,
+                method: message.method,
+                params: message.params
+              }));
+              return;
+            }
+            if (
               event.source !== window
               || event.origin !== window.location.origin
-              || !message
-              || typeof message !== "object"
               || message.type !== ${JSON.stringify(hostRequestMessage)}
               || message.capability !== capability
             ) return;
@@ -1960,6 +2547,7 @@ function installTaskboardHostBinding(cdp, supervisor, startupToken) {
         })()`,
         returnByValue: true,
       });
+      onCodexAppServerReady(cdp);
       await restoreQuotaPolicies(cdp);
       return activeContextId;
     })();
@@ -2074,11 +2662,20 @@ async function injectTarget(
   supervisor,
   attachExisting,
   startupToken,
+  onCodexAppServerNotification,
+  onCodexAppServerReady,
+  onCodexAppServerUnavailable,
 ) {
   const cdp = await runtime.connect(target);
   let retained = false;
   const hostBridge = keepAlive
-    ? installTaskboardHostBinding(cdp, supervisor, startupToken)
+    ? installTaskboardHostBinding(
+        cdp,
+        supervisor,
+        startupToken,
+        onCodexAppServerNotification,
+        onCodexAppServerReady,
+      )
     : null;
   cdp.hostBridge = hostBridge;
   try {
@@ -2177,6 +2774,7 @@ async function injectTarget(
     return { result, connection: retained ? cdp : null };
   } finally {
     if (!retained) {
+      onCodexAppServerUnavailable(cdp);
       unregisterQuotaPolicyCdp(cdp);
       cdp.close();
     }
@@ -2194,6 +2792,9 @@ async function injectAll(
   supervisor,
   attachExisting,
   startupToken,
+  onCodexAppServerNotification,
+  onCodexAppServerReady,
+  onCodexAppServerUnavailable,
 ) {
   const targets = await runtime.targets();
   if (targets.length === 0) {
@@ -2204,6 +2805,7 @@ async function injectAll(
   const activeIds = new Set(targets.map((target) => target.id));
   for (const [id, connection] of injectedTargets) {
     if (!activeIds.has(id) || connection.closed) {
+      onCodexAppServerUnavailable(connection);
       unregisterQuotaPolicyCdp(connection);
       connection.close();
       injectedTargets.delete(id);
@@ -2228,6 +2830,9 @@ async function injectAll(
           supervisor,
           attachExisting,
           startupToken,
+          onCodexAppServerNotification,
+          onCodexAppServerReady,
+          onCodexAppServerUnavailable,
         );
         if (connection) injectedTargets.set(target.id, connection);
         results.push({ targetId: target.id, title: target.title, url: target.url, ...result });
@@ -2338,6 +2943,27 @@ async function main() {
   let nativeCodexBrowser = false;
   let runtimePublishPromise = null;
   const injectedTargets = new Map();
+  const remoteCodexConnections = new Map();
+  const routableCodexConnections = new Set();
+  const codexRendererWaiters = new Set();
+  const waitForCodexRenderer = () => new Promise((resolve) => {
+    codexRendererWaiters.add(resolve);
+  });
+  const wakeCodexRendererRequests = () => {
+    for (const resolve of codexRendererWaiters) resolve();
+    codexRendererWaiters.clear();
+  };
+  const registerRoutableCodexConnection = (connection) => {
+    routableCodexConnections.add(connection);
+    wakeCodexRendererRequests();
+  };
+  const unregisterRoutableCodexConnection = (connection) => {
+    routableCodexConnections.delete(connection);
+    for (const [hostId, current] of remoteCodexConnections) {
+      if (current === connection) remoteCodexConnections.delete(hostId);
+    }
+  };
+  let taskboardChild = null;
   let idleAfterNormalExit = false;
   let openRequestGeneration = options.open ? 1 : 0;
   let openedRequestGeneration = 0;
@@ -2400,6 +3026,7 @@ async function main() {
   const requestStop = () => {
     if (stopping) return;
     stopping = true;
+    wakeCodexRendererRequests();
     wakeStop();
     cleanup().catch((error) => {
       console.error(`Cleanup failed: ${error.message}`);
@@ -2418,11 +3045,65 @@ async function main() {
     console.log(JSON.stringify({ openTaskboardSignalReady: true }));
   }
   const detached = !options.watch;
+  const codexConnectionForHost = async (hostId) => {
+    while (!stopping) {
+      for (const connection of routableCodexConnections) {
+        if (connection.closed) routableCodexConnections.delete(connection);
+      }
+      const current = remoteCodexConnections.get(hostId);
+      if (current && routableCodexConnections.has(current)) {
+        return current;
+      }
+      const connection = routableCodexConnections.values().next().value;
+      if (connection) {
+        remoteCodexConnections.set(hostId, connection);
+        return connection;
+      }
+      await waitForCodexRenderer();
+    }
+    throw new Error("Codex renderer stopped before the remote request was sent");
+  };
+  const handleCodexAppServerRequest = async (message) => {
+    if (
+      typeof message.requestId !== "string"
+      || typeof message.hostId !== "string"
+      || typeof message.method !== "string"
+    ) throw new Error("Invalid Codex host request");
+    const connection = await codexConnectionForHost(message.hostId);
+    return requestCodexAppServerViaCdp(
+      connection,
+      undefined,
+      message.hostId,
+      message.method,
+      message.params,
+    );
+  };
+  const forwardCodexAppServerNotification = (cdp, notification) => {
+    handleRemoteAutomationDecisionNotification(notification);
+    if (remoteCodexConnections.get(notification.hostId) !== cdp) return;
+    if (!taskboardChild?.connected) return;
+    taskboardChild.send({
+      type: "taskboard:codex-app-server-notification",
+      hostId: notification.hostId,
+      method: notification.method,
+      params: notification.params,
+    });
+  };
   const supervisor = createTaskboardSupervisor({
     detached,
     isReachable: isTaskboardReachable,
     waitUntilReachable: waitUntilTaskboardReachable,
-    start: () => startTaskboard({ detached }),
+    start: () => {
+      const child = startTaskboard({
+        detached,
+        onCodexAppServerRequest: handleCodexAppServerRequest,
+      });
+      taskboardChild = child;
+      child.once("exit", () => {
+        if (taskboardChild === child) taskboardChild = null;
+      });
+      return child;
+    },
     onProcessError: (error) => {
       console.error(`Taskboard process error: ${error.message}`);
     },
@@ -2518,6 +3199,7 @@ async function main() {
     if (cleanupPromise) return cleanupPromise;
     cleanupPromise = (async () => {
       injectedTargets.forEach((connection) => {
+        unregisterRoutableCodexConnection(connection);
         unregisterQuotaPolicyCdp(connection);
         connection.close();
       });
@@ -2649,6 +3331,9 @@ async function main() {
             supervisor,
             options.attachExisting,
             options.startupToken,
+            forwardCodexAppServerNotification,
+            registerRoutableCodexConnection,
+            unregisterRoutableCodexConnection,
           );
           lastError = null;
           break;
@@ -2736,6 +3421,9 @@ async function main() {
           supervisor,
           options.attachExisting,
           options.startupToken,
+          forwardCodexAppServerNotification,
+          registerRoutableCodexConnection,
+          unregisterRoutableCodexConnection,
         );
         if (results.length > 0) {
           console.log(JSON.stringify({ injected: results }, null, 2));
@@ -2759,6 +3447,7 @@ async function main() {
           }
           if (launchedCodex?.exitCode === 0) {
             injectedTargets.forEach((connection) => {
+              unregisterRoutableCodexConnection(connection);
               unregisterQuotaPolicyCdp(connection);
               connection.close();
             });
@@ -2786,6 +3475,7 @@ async function main() {
             .some((record) => record.pid === codexAppPid);
         if (launchedCodexExited) {
           injectedTargets.forEach((connection) => {
+            unregisterRoutableCodexConnection(connection);
             unregisterQuotaPolicyCdp(connection);
             connection.close();
           });
