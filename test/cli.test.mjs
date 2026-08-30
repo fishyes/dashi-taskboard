@@ -203,7 +203,6 @@ test("CODEX_TASKBOARD_URL takes precedence over runtime endpoint discovery", asy
   assert.equal(descriptorRead, false);
   assert.equal(requestedUrl.toString(), "https://tasks.example.test/token/api/projects");
 });
-
 test("WSL taskctl discovers the Windows launcher runtime descriptor from Windows APPDATA", async () => {
   let requestedUrl;
   const runtimeFile = path.join(
@@ -297,6 +296,7 @@ test("CODEX_TASKBOARD_WSL_RUNTIME_FILE overrides WSL automatic discovery", async
     "http://127.0.0.1:51988/override-token/api/projects",
   );
 });
+
 
 test("project create sends id, name, and an absolute workspace path", async () => {
   let requestBody;
