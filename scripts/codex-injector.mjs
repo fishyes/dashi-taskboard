@@ -123,7 +123,7 @@ function stableCodexUserId(account) {
     && typeof account.account.email === "string"
     ? account.account.email.trim().toLowerCase()
     : "";
-  if (!email) throw new Error("The current Codex ChatGPT account email is unavailable");
+  if (!email) return "";
   const digest = createHash("sha256")
     .update("codex-taskboard-user\0")
     .update(email)
@@ -2508,15 +2508,31 @@ function installTaskboardHostBinding(
       isAuthorizedContext: (executionContextId) => executionContextId === activeContextId,
       parseAutomationRequest: parseTaskboardAutomationHostRequest,
       ensure: () => supervisor.ensure({ force: true }),
-      readCurrentUser: async () => ({
-        userId: stableCodexUserId(await requestCodexAppServerViaCdp(
+      readCurrentUser: async () => {
+        let account = await requestCodexAppServerViaCdp(
           cdp,
           undefined,
           "local",
           "account/read",
           { refreshToken: false },
-        )),
-      }),
+        );
+        if (
+          account?.account?.type === "chatgpt"
+          && (
+            typeof account.account.email !== "string"
+            || !account.account.email.trim()
+          )
+        ) {
+          account = await requestCodexAppServerViaCdp(
+            cdp,
+            undefined,
+            "local",
+            "account/read",
+            { refreshToken: true },
+          );
+        }
+        return { userId: stableCodexUserId(account) };
+      },
       loadFrame: (request) => loadTaskboardFrameViaCdp(
         cdp,
         request.frameName,

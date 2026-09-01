@@ -29,8 +29,8 @@
   const HOST_HEARTBEAT_MAX_AGE_MS = 8_000;
   const MACOS_TITLEBAR_SAFE_LEFT = 80;
   const FRAME_REFRESH_PARAM = "__codex_taskboard_refresh";
-  // 簡體別名僅用於辨識不同語系的 Codex 主程式，不會顯示在任務面板介面。
-  const PLUGIN_LABELS = ["外掛", "外掛程式", "插件", "plugins"];
+  // 非繁中別名僅用於辨識不同語系的 Codex 主程式，不會顯示在任務面板介面。
+  const PLUGIN_LABELS = ["外掛", "外掛程式", "插件", "plugins", "プラグイン"];
   const NATIVE_PAGE_LABELS = [
     "新增任務",
     "新建任务",
@@ -108,7 +108,7 @@
   let pendingThreadCreation = null;
   let lastNativeThreadId = "";
   let lastNativeProjectId = "";
-  let currentCodexUserId = "";
+  let currentCodexUserId = null;
   let suspendedNativeBrowserPanel = null;
   let active = false;
   let destroyed = false;
@@ -285,7 +285,8 @@
     const sidebarScroll = document.querySelector("[data-app-action-sidebar-scroll]");
     const scroll = sidebarScroll || document.querySelector('aside nav[role="navigation"]');
     if (!scroll) return null;
-    const buttons = Array.from(scroll.querySelectorAll("button"));
+    const buttons = Array.from(scroll.querySelectorAll("button"))
+      .filter((button) => button.getAttribute(OWNED_ATTRIBUTE) !== "true");
     const plugin = buttons.find((button) => buttonMatches(button, PLUGIN_LABELS));
     if (plugin && plugin.parentElement) {
       if (!sidebarScroll) return plugin;
@@ -297,13 +298,13 @@
     }
 
     const firstSection = scroll.querySelector("[data-app-action-sidebar-section]");
-    const sectionTop = firstSection?.getBoundingClientRect().top ?? Number.POSITIVE_INFINITY;
-    const groups = Array.from(scroll.querySelectorAll("div")).filter((element) => {
-      const directButtons = Array.from(element.children).filter((child) => child.tagName === "BUTTON");
-      return directButtons.length >= 3 && element.getBoundingClientRect().top < sectionTop;
-    });
-    const group = groups.sort((left, right) => right.children.length - left.children.length)[0];
-    return Array.from(group?.children || []).filter((child) => child.tagName === "BUTTON").at(-1) || null;
+    if (!firstSection) return null;
+    const sectionTop = firstSection.getBoundingClientRect().top;
+    return buttons.filter((button) => {
+      const rect = button.getBoundingClientRect();
+      return rect.height > 0
+        && rect.bottom <= sectionTop;
+    }).at(-1) || null;
   }
 
   function replaceEntryIcon(button) {
@@ -643,6 +644,7 @@
   }
 
   async function captureHostContext() {
+    currentCodexUserId = null;
     const todoProgress = nativeTodoProgress();
     const [selectedProjectId, projectMetadata, currentUser] = await Promise.all([
       selectedNativeProjectId(),
@@ -786,6 +788,21 @@
     window.setTimeout(postHostContext, REATTACH_DELAY_MS);
   }
 
+  function userIdFromName(name) {
+    const slug = name.normalize("NFKD")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 96);
+    if (slug) return slug;
+    let hash = 2166136261;
+    for (const character of name) {
+      hash ^= character.codePointAt(0);
+      hash = Math.imul(hash, 16777619);
+    }
+    return `codex-user-${(hash >>> 0).toString(36)}`;
+  }
+
   function readCodexUser() {
     const auth0Avatar = Array.from(document.querySelectorAll("img"))
       .find((image) => image.src.includes("cdn.auth0.com/avatars/"));
@@ -796,12 +813,12 @@
         || normalizedLabel(button.getAttribute("aria-label")).includes("个人资料")
       ));
     const name = profileButton?.textContent?.replace(/\s+/g, " ").trim();
-    if (!currentCodexUserId || !name) return null;
+    if (currentCodexUserId === null || !name) return null;
     const avatar = profileButton.querySelector("img");
     const avatarUrl = avatar?.currentSrc || avatar?.src || null;
     return {
       type: "user",
-      id: currentCodexUserId,
+      id: currentCodexUserId || userIdFromName(name),
       name,
       avatarUrl,
     };

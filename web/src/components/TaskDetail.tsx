@@ -1055,6 +1055,14 @@ export function TaskDetail({
                 {editingDescription ? (
                   <div
                     className="issue-description-composer"
+                    onMouseDownCapture={(event) => {
+                      if (
+                        event.target instanceof Element
+                        && event.target.closest(
+                          ".inline-media-image > button, .inline-media-attachment > button, .issue-description-attach-button",
+                        )
+                      ) event.preventDefault();
+                    }}
                     onBlur={(event) => {
                       if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
                       void saveDescription();
@@ -1309,6 +1317,15 @@ export function TaskDetail({
                     );
                   }
                   const comment = item.comment;
+                  const commentActor: ActorIdentity = comment.authorType === currentUser.type
+                    && comment.authorId === currentUser.id
+                    ? currentUser
+                    : {
+                        type: comment.authorType,
+                        id: comment.authorId,
+                        name: comment.authorName,
+                        avatarUrl: comment.authorAvatarUrl,
+                      };
                   return (
                   <article
                     className={`comment-entry is-${comment.authorType}`}
@@ -1319,14 +1336,9 @@ export function TaskDetail({
                       <header className="comment-header">
                         <ActorAvatar
                           className="comment-avatar"
-                          actor={{
-                            type: comment.authorType,
-                            id: comment.authorId,
-                            name: comment.authorName,
-                            avatarUrl: comment.authorAvatarUrl,
-                          }}
+                          actor={commentActor}
                         />
-                        <strong>{comment.authorName}</strong>
+                        <strong>{commentActor.name}</strong>
                         <time title={exactTime(comment.createdAt, locale)}>{relativeTime(comment.createdAt, locale)}</time>
                         {comment.version > 1 && (
                           <span

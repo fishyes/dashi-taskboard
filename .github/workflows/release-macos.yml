@@ -14,10 +14,198 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  release-preflight:
+    name: Validate release tag and versions
+    runs-on: ubuntu-24.04
+    outputs:
+      release_tag: ${{ steps.validate.outputs.release_tag }}
+      package_version: ${{ steps.validate.outputs.package_version }}
+      release_version: ${{ steps.validate.outputs.release_version }}
+      prerelease: ${{ steps.validate.outputs.prerelease }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+
+      - name: Validate release tag and versions
+        id: validate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          TAG_CREATED: ${{ github.event.created }}
+          TAG_DELETED: ${{ github.event.deleted }}
+          TAG_FORCED: ${{ github.event.forced }}
+        run: |
+          set -euo pipefail
+          if [[ "$TAG_CREATED" != "true" || "$TAG_DELETED" == "true" || "$TAG_FORCED" == "true" ]]; then
+            echo "釋出標籤必須是首次建立，不能刪除或強制更新。" >&2
+            exit 1
+          fi
+          git fetch --no-tags origin main
+          TAG_COMMIT="$(git rev-parse "$RELEASE_TAG^{}")"
+          if [[ "$TAG_COMMIT" != "$GITHUB_SHA" ]]; then
+            echo "標籤提交與目前工作流提交不一致。" >&2
+            exit 1
+          fi
+          git merge-base --is-ancestor "$TAG_COMMIT" origin/main
+
+          REMOTE_TAG_COMMIT="$(git ls-remote origin "refs/tags/$RELEASE_TAG^{}" | awk 'NR == 1 { print $1 }')"
+          if [[ -z "$REMOTE_TAG_COMMIT" ]]; then
+            REMOTE_TAG_COMMIT="$(git ls-remote origin "refs/tags/$RELEASE_TAG" | awk 'NR == 1 { print $1 }')"
+          fi
+          if [[ "$REMOTE_TAG_COMMIT" != "$GITHUB_SHA" ]]; then
+            echo "遠端釋出標籤與目前工作流提交不一致。" >&2
+            exit 1
+          fi
+
+          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+          CARGO_VERSION="$(node -e 'const fs=require("fs"); const source=fs.readFileSync("src-tauri/Cargo.toml","utf8"); console.log(source.match(/^version = "([^"]+)"/m)[1])')"
+          TAURI_VERSION="$(node -p "require('./src-tauri/tauri.conf.json').version")"
+          if [[ "$PACKAGE_VERSION" != "$CARGO_VERSION" || "$PACKAGE_VERSION" != "$TAURI_VERSION" ]]; then
+            echo "package.json、Cargo.toml 和 tauri.conf.json 的版本必須一致。" >&2
+            exit 1
+          fi
+          if [[ ! "$PACKAGE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Apple-facing 應用版本必須是純數字 major.minor.patch。" >&2
+            exit 1
+          fi
+
+          STABLE_TAG="v$PACKAGE_VERSION"
+          BETA_PREFIX="$STABLE_TAG-beta."
+          if [[ "$RELEASE_TAG" == "$STABLE_TAG" ]]; then
+            RELEASE_VERSION="$PACKAGE_VERSION"
+            RELEASE_CHANNEL="stable"
+            PRERELEASE=false
+            BETA_NUMBER=""
+          elif [[ "$RELEASE_TAG" == "$BETA_PREFIX"* ]]; then
+            BETA_NUMBER="${RELEASE_TAG#"$BETA_PREFIX"}"
+            if [[ ! "$BETA_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
+              echo "Beta 標籤必須是 $BETA_PREFIX 加正整數。" >&2
+              exit 1
+            fi
+            RELEASE_VERSION="$PACKAGE_VERSION-beta.$BETA_NUMBER"
+            RELEASE_CHANNEL="beta"
+            PRERELEASE=true
+          else
+            echo "釋出標籤必須是 $STABLE_TAG 或 $BETA_PREFIX<正整數>。" >&2
+            exit 1
+          fi
+
+          RELEASE_CHECK="$RUNNER_TEMP/release-check.json"
+          if ! RELEASE_STATUS="$(curl --silent --show-error \
+            --output "$RELEASE_CHECK" \
+            --write-out '%{http_code}' \
+            --header "Accept: application/vnd.github+json" \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG")"; then
+            echo "無法確認 Release 是否存在。" >&2
+            exit 1
+          fi
+          case "$RELEASE_STATUS" in
+            404) ;;
+            200)
+              echo "該標籤或版本已存在 Release。" >&2
+              exit 1
+              ;;
+            *)
+              echo "查詢 Release 失敗，HTTP $RELEASE_STATUS。" >&2
+              exit 1
+              ;;
+          esac
+
+          RELEASES="$RUNNER_TEMP/releases.tsv"
+          gh api \
+            --header "X-GitHub-Api-Version: 2026-03-10" \
+            --paginate \
+            "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq '.[] | [.tag_name, .draft, .prerelease, (.immutable // false), .target_commitish] | @tsv' \
+            > "$RELEASES"
+          PACKAGE_VERSION="$PACKAGE_VERSION" \
+          RELEASE_CHANNEL="$RELEASE_CHANNEL" \
+          BETA_NUMBER="$BETA_NUMBER" \
+          RELEASES="$RELEASES" \
+          GITHUB_SHA="$GITHUB_SHA" \
+          node <<'NODE'
+          const fs = require("node:fs");
+          const current = process.env.PACKAGE_VERSION.split(".").map(Number);
+          const releases = fs.readFileSync(process.env.RELEASES, "utf8")
+            .split(/\r?\n/)
+            .filter(Boolean)
+            .map((line) => {
+              const [tag, draft, prerelease, immutable, target] = line.split("\t");
+              return {
+                tag,
+                draft: draft === "true",
+                prerelease: prerelease === "true",
+                immutable: immutable === "true",
+                target,
+              };
+            });
+          const compare = (left, right) => {
+            for (let index = 0; index < Math.max(left.length, right.length); index += 1) {
+              const difference = (left[index] ?? 0) - (right[index] ?? 0);
+              if (difference !== 0) return difference;
+            }
+            return 0;
+          };
+          for (const release of releases) {
+            const match = /^(?:app-)?v(\d+(?:\.\d+)*)$/.exec(release.tag);
+            if (match && compare(match[1].split(".").map(Number), current) >= 0) {
+              console.error(`已有相同或更高版本的稳定 Release：${release.tag}`);
+              process.exit(1);
+            }
+
+            if (process.env.RELEASE_CHANNEL === "beta") {
+              const betaMatch = /^v(\d+(?:\.\d+)*)-beta\.([1-9]\d*)$/.exec(release.tag);
+              if (betaMatch) {
+                const baseComparison = compare(betaMatch[1].split(".").map(Number), current);
+                const betaComparison = BigInt(betaMatch[2]) >= BigInt(process.env.BETA_NUMBER);
+                if (baseComparison > 0 || (baseComparison === 0 && betaComparison)) {
+                  console.error(`已有相同或更高版本的 Beta Release：${release.tag}`);
+                  process.exit(1);
+                }
+              }
+            }
+          }
+
+          if (process.env.RELEASE_CHANNEL === "stable") {
+            const confirmedBeta = releases.some((release) => {
+              const betaMatch = /^v(\d+(?:\.\d+)*)-beta\.([1-9]\d*)$/.exec(release.tag);
+              return betaMatch?.[1] === process.env.PACKAGE_VERSION
+                && release.draft === false
+                && release.prerelease === true
+                && release.immutable === true
+                && release.target === process.env.GITHUB_SHA;
+            });
+            if (!confirmedBeta) {
+              console.error("正式釋出前必須先發布同一提交、同一版本的 immutable Beta Release。");
+              process.exit(1);
+            }
+          }
+          NODE
+          echo "RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_ENV"
+          echo "PACKAGE_VERSION=$PACKAGE_VERSION" >> "$GITHUB_ENV"
+          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "package_version=$PACKAGE_VERSION" >> "$GITHUB_OUTPUT"
+          echo "release_version=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+
   release-linux:
     name: Build Ubuntu 24.04 x64 packages
+    needs: release-preflight
     runs-on: ubuntu-24.04
     timeout-minutes: 40
+    env:
+      CODEX_TASKBOARD_RELEASE_VERSION: ${{ needs['release-preflight'].outputs.release_version }}
 
     steps:
       - name: Checkout
@@ -95,8 +283,11 @@ jobs:
 
   release-windows-preview:
     name: Build unsigned Windows x64 Preview
+    needs: release-preflight
     runs-on: windows-2025
     timeout-minutes: 40
+    env:
+      CODEX_TASKBOARD_RELEASE_VERSION: ${{ needs['release-preflight'].outputs.release_version }}
 
     steps:
       - name: Checkout
@@ -130,11 +321,13 @@ jobs:
 
   release-macos:
     name: Build signed universal macOS app
-    needs:
-      - release-linux
-      - release-windows-preview
+    needs: release-preflight
     runs-on: macos-latest
     timeout-minutes: 90
+    env:
+      CODEX_TASKBOARD_RELEASE_VERSION: ${{ needs['release-preflight'].outputs.release_version }}
+      RELEASE_TAG: ${{ needs['release-preflight'].outputs.release_tag }}
+      PACKAGE_VERSION: ${{ needs['release-preflight'].outputs.package_version }}
 
     steps:
       - name: Checkout
@@ -148,94 +341,6 @@ jobs:
         with:
           node-version: 22
           cache: npm
-
-      - name: Validate release tag and versions
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.ref_name }}
-          TAG_CREATED: ${{ github.event.created }}
-          TAG_DELETED: ${{ github.event.deleted }}
-          TAG_FORCED: ${{ github.event.forced }}
-        run: |
-          set -euo pipefail
-          if [[ "$TAG_CREATED" != "true" || "$TAG_DELETED" == "true" || "$TAG_FORCED" == "true" ]]; then
-            echo "釋出標籤必須是首次建立，不能刪除或強制更新。" >&2
-            exit 1
-          fi
-          git fetch --no-tags origin main
-          TAG_COMMIT="$(git rev-parse "$RELEASE_TAG^{}")"
-          if [[ "$TAG_COMMIT" != "$GITHUB_SHA" ]]; then
-            echo "標籤提交與目前工作流提交不一致。" >&2
-            exit 1
-          fi
-          git merge-base --is-ancestor "$TAG_COMMIT" origin/main
-
-          REMOTE_TAG_COMMIT="$(git ls-remote origin "refs/tags/$RELEASE_TAG^{}" | awk 'NR == 1 { print $1 }')"
-          if [[ -z "$REMOTE_TAG_COMMIT" ]]; then
-            REMOTE_TAG_COMMIT="$(git ls-remote origin "refs/tags/$RELEASE_TAG" | awk 'NR == 1 { print $1 }')"
-          fi
-          if [[ "$REMOTE_TAG_COMMIT" != "$GITHUB_SHA" ]]; then
-            echo "遠端釋出標籤與目前工作流提交不一致。" >&2
-            exit 1
-          fi
-
-          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
-          CARGO_VERSION="$(node -e 'const fs=require("fs"); const source=fs.readFileSync("src-tauri/Cargo.toml","utf8"); console.log(source.match(/^version = "([^"]+)"/m)[1])')"
-          TAURI_VERSION="$(node -p "require('./src-tauri/tauri.conf.json').version")"
-          if [[ "$PACKAGE_VERSION" != "$CARGO_VERSION" || "$PACKAGE_VERSION" != "$TAURI_VERSION" ]]; then
-            echo "package.json、Cargo.toml 和 tauri.conf.json 的版本必須一致。" >&2
-            exit 1
-          fi
-          if [[ "$RELEASE_TAG" != "v$PACKAGE_VERSION" ]]; then
-            echo "釋出標籤必須與應用版本一致。" >&2
-            exit 1
-          fi
-
-          RELEASE_CHECK="$RUNNER_TEMP/release-check.json"
-          if ! RELEASE_STATUS="$(curl --silent --show-error \
-            --output "$RELEASE_CHECK" \
-            --write-out '%{http_code}' \
-            --header "Accept: application/vnd.github+json" \
-            --header "Authorization: Bearer $GH_TOKEN" \
-            --header "X-GitHub-Api-Version: 2022-11-28" \
-            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG")"; then
-            echo "無法確認 Release 是否存在。" >&2
-            exit 1
-          fi
-          case "$RELEASE_STATUS" in
-            404) ;;
-            200)
-              echo "該標籤或版本已存在 Release。" >&2
-              exit 1
-              ;;
-            *)
-              echo "查詢 Release 失敗，HTTP $RELEASE_STATUS。" >&2
-              exit 1
-              ;;
-          esac
-
-          RELEASE_TAGS="$RUNNER_TEMP/release-tags.txt"
-          gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq '.[].tag_name' > "$RELEASE_TAGS"
-          PACKAGE_VERSION="$PACKAGE_VERSION" RELEASE_TAGS="$RELEASE_TAGS" node <<'NODE'
-          const fs = require("node:fs");
-          const current = process.env.PACKAGE_VERSION.split(".").map(Number);
-          const compare = (left, right) => {
-            for (let index = 0; index < Math.max(left.length, right.length); index += 1) {
-              const difference = (left[index] ?? 0) - (right[index] ?? 0);
-              if (difference !== 0) return difference;
-            }
-            return 0;
-          };
-          for (const tag of fs.readFileSync(process.env.RELEASE_TAGS, "utf8").split(/\r?\n/)) {
-            const match = /^(?:app-)?v(\d+(?:\.\d+)*)$/.exec(tag);
-            if (match && compare(match[1].split(".").map(Number), current) >= 0) {
-              console.error(`已有相同或更高版本的 Release：${tag}`);
-              process.exit(1);
-            }
-          }
-          NODE
-          echo "RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_ENV"
-          echo "PACKAGE_VERSION=$PACKAGE_VERSION" >> "$GITHUB_ENV"
 
       - name: Set up Rust 1.88
         uses: dtolnay/rust-toolchain@2eae45db285e407f22119950686d47e1101e071b # 1.88.0
@@ -371,6 +476,63 @@ jobs:
           RELEASE_ROOT="$BUNDLE_ROOT/release"
           npm run app:verify-release -- "$APP_PATH" "$DMG_PATH" "$RELEASE_ROOT" "$RELEASE_TAG"
 
+      - name: Stage final public macOS release assets
+        run: |
+          BUNDLE_ROOT="src-tauri/target/universal-apple-darwin/release/bundle"
+          MACOS_RELEASE="$RUNNER_TEMP/macos-release"
+          mkdir -p "$MACOS_RELEASE"
+          cp \
+            "$BUNDLE_ROOT/dmg/Codex.Taskboard_${PACKAGE_VERSION}_universal.dmg" \
+            "$MACOS_RELEASE/Codex.Taskboard_${PACKAGE_VERSION}_macOS-universal.dmg"
+          cp "$BUNDLE_ROOT/release/Codex.Taskboard_${PACKAGE_VERSION}_universal.app.tar.gz" "$MACOS_RELEASE/"
+          cp "$BUNDLE_ROOT/release/Codex.Taskboard_${PACKAGE_VERSION}_universal.app.tar.gz.sig" "$MACOS_RELEASE/"
+          cp "$BUNDLE_ROOT/release/latest.json" "$MACOS_RELEASE/"
+
+      - name: Preserve final public macOS release assets
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: macos-release-${{ github.sha }}
+          path: ${{ runner.temp }}/macos-release
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Remove temporary signing files
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/codex-taskboard-signing.keychain-db" 2>/dev/null || true
+          rm -f "$RUNNER_TEMP/developer-id.p12"
+          rm -f "$RUNNER_TEMP/app-store-connect.p8"
+
+  draft-release:
+    name: Create draft release
+    needs:
+      - release-preflight
+      - release-linux
+      - release-windows-preview
+      - release-macos
+    runs-on: ubuntu-24.04
+    env:
+      RELEASE_TAG: ${{ needs['release-preflight'].outputs.release_tag }}
+      PACKAGE_VERSION: ${{ needs['release-preflight'].outputs.package_version }}
+      PRERELEASE: ${{ needs['release-preflight'].outputs.prerelease }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+
+      - name: Restore final public macOS release assets
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: macos-release-${{ github.sha }}
+          path: ${{ runner.temp }}/macos-release
+
       - name: Restore unsigned Windows x64 Preview
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
@@ -385,8 +547,7 @@ jobs:
 
       - name: Add and verify the Linux x64 updater
         run: |
-          BUNDLE_ROOT="src-tauri/target/universal-apple-darwin/release/bundle"
-          LATEST_PATH="$BUNDLE_ROOT/release/latest.json"
+          LATEST_PATH="$RUNNER_TEMP/macos-release/latest.json"
           LINUX_DEB_NAME="Codex.Taskboard_${PACKAGE_VERSION}_Ubuntu-24.04-x64.deb"
           LINUX_APPIMAGE_NAME="Codex.Taskboard_${PACKAGE_VERSION}_Ubuntu-24.04-x64.AppImage"
           LINUX_DEB="$RUNNER_TEMP/linux-release/$LINUX_DEB_NAME"
@@ -409,16 +570,14 @@ jobs:
       - name: Create trusted release asset manifest
         run: |
           set -euo pipefail
-          BUNDLE_ROOT="src-tauri/target/universal-apple-darwin/release/bundle"
+          MACOS_RELEASE="$RUNNER_TEMP/macos-release"
           RELEASE_ASSETS="$RUNNER_TEMP/release-assets"
           MANIFEST_ROOT="$RUNNER_TEMP/release-manifest"
           mkdir -p "$RELEASE_ASSETS" "$MANIFEST_ROOT"
-          cp \
-            "$BUNDLE_ROOT/dmg/Codex.Taskboard_${PACKAGE_VERSION}_universal.dmg" \
-            "$RELEASE_ASSETS/Codex.Taskboard_${PACKAGE_VERSION}_macOS-universal.dmg"
-          cp "$BUNDLE_ROOT/release/Codex.Taskboard_${PACKAGE_VERSION}_universal.app.tar.gz" "$RELEASE_ASSETS/"
-          cp "$BUNDLE_ROOT/release/Codex.Taskboard_${PACKAGE_VERSION}_universal.app.tar.gz.sig" "$RELEASE_ASSETS/"
-          cp "$BUNDLE_ROOT/release/latest.json" "$RELEASE_ASSETS/"
+          cp "$MACOS_RELEASE/Codex.Taskboard_${PACKAGE_VERSION}_macOS-universal.dmg" "$RELEASE_ASSETS/"
+          cp "$MACOS_RELEASE/Codex.Taskboard_${PACKAGE_VERSION}_universal.app.tar.gz" "$RELEASE_ASSETS/"
+          cp "$MACOS_RELEASE/Codex.Taskboard_${PACKAGE_VERSION}_universal.app.tar.gz.sig" "$RELEASE_ASSETS/"
+          cp "$MACOS_RELEASE/latest.json" "$RELEASE_ASSETS/"
           cp \
             "$RUNNER_TEMP/windows-preview/Codex Taskboard_${PACKAGE_VERSION}_x64-setup.exe" \
             "$RELEASE_ASSETS/Codex.Taskboard_${PACKAGE_VERSION}_NSIS-x64-unsigned.exe"
@@ -460,12 +619,20 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
           RELEASE_ASSETS="$RUNNER_TEMP/release-assets"
+          RELEASE_FLAGS=(--draft)
+          if [[ "$PRERELEASE" == "true" ]]; then
+            RELEASE_FLAGS+=(--prerelease --latest=false)
+          elif [[ "$PRERELEASE" != "false" ]]; then
+            echo "無效的 prerelease 狀態：$PRERELEASE" >&2
+            exit 1
+          fi
           gh release create "$RELEASE_TAG" \
             --repo "$GITHUB_REPOSITORY" \
             --verify-tag \
             --target "$GITHUB_SHA" \
-            --draft \
+            "${RELEASE_FLAGS[@]}" \
             --title "Codex Taskboard $RELEASE_TAG" \
             --generate-notes \
             "$RELEASE_ASSETS/Codex.Taskboard_${PACKAGE_VERSION}_macOS-universal.dmg"
@@ -494,16 +661,9 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             "$RELEASE_ASSETS/latest.json"
 
-      - name: Remove temporary signing files
-        if: always()
-        run: |
-          security delete-keychain "$RUNNER_TEMP/codex-taskboard-signing.keychain-db" 2>/dev/null || true
-          rm -f "$RUNNER_TEMP/developer-id.p12"
-          rm -f "$RUNNER_TEMP/app-store-connect.p8"
-
   promote-release:
     name: Verify and publish immutable macOS release
-    needs: release-macos
+    needs: draft-release
     runs-on: macos-latest
     timeout-minutes: 30
     environment: macos-release
@@ -529,10 +689,25 @@ jobs:
           set -euo pipefail
           API_VERSION_HEADER="X-GitHub-Api-Version: 2026-03-10"
           PACKAGE_VERSION="$(node -p "require('./package.json').version")"
-          if [[ "$(git rev-parse HEAD)" != "$GITHUB_SHA" || "$RELEASE_TAG" != "v$PACKAGE_VERSION" ]]; then
+          EXPECTED_PRERELEASE=false
+          if [[ "$RELEASE_TAG" == "v$PACKAGE_VERSION" ]]; then
+            :
+          elif [[ "$RELEASE_TAG" == "v$PACKAGE_VERSION-beta."* ]]; then
+            BETA_NUMBER="${RELEASE_TAG#"v$PACKAGE_VERSION-beta."}"
+            if [[ ! "$BETA_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
+              echo "promotion 收到無效的 Beta 標籤。" >&2
+              exit 1
+            fi
+            EXPECTED_PRERELEASE=true
+          else
+            echo "promotion 標籤與應用版本不一致。" >&2
+            exit 1
+          fi
+          if [[ "$(git rev-parse HEAD)" != "$GITHUB_SHA" ]]; then
             echo "promotion checkout、標籤和應用版本不一致。" >&2
             exit 1
           fi
+          echo "EXPECTED_PRERELEASE=$EXPECTED_PRERELEASE" >> "$GITHUB_ENV"
 
           if [[ -z "$RULESET_TOKEN" ]]; then
             echo "缺少 RELEASE_RULESET_TOKEN，無法確認標籤 Ruleset 的繞過者。" >&2
@@ -629,9 +804,13 @@ jobs:
           if ! jq -e \
             --arg tag "$RELEASE_TAG" \
             --arg target "$GITHUB_SHA" \
-            '.tag_name == $tag and .target_commitish == $target and .draft == true' \
+            --argjson prerelease "$EXPECTED_PRERELEASE" \
+            '.tag_name == $tag and
+             .target_commitish == $target and
+             .draft == true and
+             .prerelease == $prerelease' \
             <<< "$DRAFT_RELEASE" >/dev/null; then
-            echo "promotion 只能處理指向建置提交的 Draft Release。" >&2
+            echo "promotion 只能處理指向建置提交且通道狀態正確的 Draft Release。" >&2
             exit 1
           fi
 
@@ -700,10 +879,12 @@ jobs:
           if ! jq -e \
             --arg tag "$RELEASE_TAG" \
             --arg target "$GITHUB_SHA" \
+            --argjson prerelease "$EXPECTED_PRERELEASE" \
             --argjson asset_count "$EXPECTED_ASSET_COUNT" \
             '.tag_name == $tag and
              .target_commitish == $target and
              .draft == true and
+             .prerelease == $prerelease and
              (.assets | length) == $asset_count and
              all(.assets[]; .state == "uploaded")' \
             <<< "$DRAFT_RELEASE" >/dev/null; then
@@ -747,19 +928,37 @@ jobs:
           MANIFEST_PATH="$RUNNER_TEMP/trusted-release-manifest/release-assets.sha256"
           FINAL_RELEASE="$(gh api --header "$API_VERSION_HEADER" \
             "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG")"
+          LATEST_RELEASE="$(gh api --header "$API_VERSION_HEADER" \
+            "repos/$GITHUB_REPOSITORY/releases/latest")"
           EXPECTED_ASSET_COUNT="$(wc -l < "$MANIFEST_PATH" | tr -d ' ')"
 
           if ! jq -e \
             --arg tag "$RELEASE_TAG" \
             --arg target "$GITHUB_SHA" \
+            --argjson prerelease "$EXPECTED_PRERELEASE" \
             --argjson asset_count "$EXPECTED_ASSET_COUNT" \
             '.tag_name == $tag and
              .target_commitish == $target and
              .draft == false and
+             .prerelease == $prerelease and
              .immutable == true and
              (.assets | length) == $asset_count' \
             <<< "$FINAL_RELEASE" >/dev/null; then
-            echo "最終 Release 未釋出、未鎖定或資產集合不正確。" >&2
+            echo "最終 Release 的發布、通道、鎖定或資產狀態不正確。" >&2
+            exit 1
+          fi
+
+          if [[ "$EXPECTED_PRERELEASE" == "true" ]]; then
+            if ! jq -e --arg tag "$RELEASE_TAG" \
+              '.draft == false and .prerelease == false and .tag_name != $tag' \
+              <<< "$LATEST_RELEASE" >/dev/null; then
+              echo "Beta Release 不得成為 GitHub latest。" >&2
+              exit 1
+            fi
+          elif ! jq -e --arg tag "$RELEASE_TAG" \
+            '.draft == false and .prerelease == false and .tag_name == $tag' \
+            <<< "$LATEST_RELEASE" >/dev/null; then
+            echo "正式 Release 必須成為 GitHub latest。" >&2
             exit 1
           fi
 
