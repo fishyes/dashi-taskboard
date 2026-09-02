@@ -2,6 +2,7 @@
 
 import { spawn, spawnSync } from "node:child_process";
 import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
+import { once } from "node:events";
 import { createReadStream, createWriteStream } from "node:fs";
 import { chmod, mkdir, readFile, rename, stat, unlink, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -577,18 +578,43 @@ function activateCodexApp(pid) {
   if (activation.status !== 0) throw new Error("Unable to activate the Codex app");
 }
 
+function managedCodexSpawnFailure(executable, args, error) {
+  const diagnosticArguments = args.map((argument) => (
+    argument.startsWith("--user-data-dir=")
+      ? "--user-data-dir=<taskboard-profile>"
+      : argument
+  ));
+  const details = [
+    typeof error?.code === "string" ? `code=${error.code}` : null,
+    error?.errno !== undefined ? `errno=${error.errno}` : null,
+    typeof error?.syscall === "string" ? `syscall=${JSON.stringify(error.syscall)}` : null,
+    `message=${JSON.stringify(error instanceof Error ? error.message : String(error))}`,
+  ].filter(Boolean);
+  const failure = new Error(
+    `Managed Codex spawn failed: executable=${JSON.stringify(executable)}; `
+      + `arguments=${JSON.stringify(diagnosticArguments)}; ${details.join("; ")}`,
+    { cause: error },
+  );
+  failure.managedCodexSpawnFailure = true;
+  return failure;
+}
+
 async function launchCodexWithPipe(appPath) {
-  const child = spawn(
-    codexExecutablePath(appPath),
-    [
-      `--user-data-dir=${independentCodexProfilePath}`,
-      "--remote-debugging-pipe",
-    ],
-    {
+  const executable = codexExecutablePath(appPath);
+  const args = [
+    `--user-data-dir=${independentCodexProfilePath}`,
+    "--remote-debugging-pipe",
+  ];
+  let child;
+  try {
+    child = spawn(executable, args, {
       env: withoutTaskboardLauncherEnvironment(process.env),
       stdio: ["ignore", "ignore", "ignore", "pipe", "pipe"],
-    },
-  );
+    });
+    if (!Number.isInteger(child.pid)) await once(child, "spawn");
+  } catch (error) {
+    throw managedCodexSpawnFailure(executable, args, error);
+  }
   const browser = new CdpPipeBrowser(child);
   try {
     await browser.open();
@@ -3413,7 +3439,18 @@ async function main() {
     if (stopping) return;
 
     if (options.cdpPipe || !cdpReachable) {
-      idleAfterNormalExit = !(await startManagedCodex()) && !nativeCodexBrowser;
+      const launchRequestGeneration = openRequestGeneration;
+      try {
+        idleAfterNormalExit = !(await startManagedCodex()) && !nativeCodexBrowser;
+      } catch (error) {
+        if (!options.watch || error?.managedCodexSpawnFailure !== true) throw error;
+        openedRequestGeneration = Math.max(
+          openedRequestGeneration,
+          launchRequestGeneration,
+        );
+        idleAfterNormalExit = true;
+        console.error(`Waiting for Codex launch: ${error.message}`);
+      }
     } else {
       if (options.launch) {
         const runningCodex = codexAppProcesses(options.appPath)
@@ -3530,6 +3567,7 @@ async function main() {
           if (idleAfterNormalExit) continue;
         } else {
           if (!hasOpenPending()) continue;
+          const launchRequestGeneration = openRequestGeneration;
           try {
             if (!(await startManagedCodex())) {
               if (nativeCodexBrowser) await requestTaskboardOpen();
@@ -3538,6 +3576,12 @@ async function main() {
             exitedManagedCodex = null;
             idleAfterNormalExit = false;
           } catch (restartError) {
+            if (restartError?.managedCodexSpawnFailure === true) {
+              openedRequestGeneration = Math.max(
+                openedRequestGeneration,
+                launchRequestGeneration,
+              );
+            }
             console.error(`Waiting to restart Codex: ${restartError.message}`);
             continue;
           }
@@ -3631,10 +3675,18 @@ async function main() {
               continue;
             }
             console.error("Codex exited unexpectedly; restarting it for the taskboard launcher.");
+            const launchRequestGeneration = openRequestGeneration;
             try {
               await startManagedCodex();
               if (options.open) openRequestGeneration += 1;
             } catch (restartError) {
+              if (restartError?.managedCodexSpawnFailure === true) {
+                openedRequestGeneration = Math.max(
+                  openedRequestGeneration,
+                  launchRequestGeneration,
+                );
+                idleAfterNormalExit = true;
+              }
               console.error(`Waiting to restart Codex: ${restartError.message}`);
             }
             continue;

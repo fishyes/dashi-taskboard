@@ -45,6 +45,8 @@ if (releaseTag !== stableTag && !/^[1-9]\d*$/.test(betaNumber)) {
   throw new Error("Release tag does not match package.json version");
 }
 const releaseVersion = releaseTag.slice(1);
+const productName = betaNumber ? "Codex Taskboard Beta" : tauriConfig.productName;
+const appName = `${productName}.app`;
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, { encoding: "utf8", ...options });
@@ -71,10 +73,18 @@ function plistValue(targetPath, key) {
 }
 
 function verifyApp(targetPath) {
+  if (path.basename(targetPath) !== appName) {
+    throw new Error(`App bundle name must be ${appName}`);
+  }
   run("/usr/bin/codesign", ["--verify", "--deep", "--strict", "--verbose=2", targetPath]);
   run("/usr/bin/xcrun", ["stapler", "validate", targetPath]);
   run("/usr/sbin/spctl", ["-a", "-t", "exec", "-vv", targetPath]);
   const infoPath = path.join(targetPath, "Contents", "Info.plist");
+  for (const nameKey of ["CFBundleDisplayName", "CFBundleName"]) {
+    if (plistValue(infoPath, nameKey) !== productName) {
+      throw new Error(`Updater App ${nameKey} does not match ${productName}`);
+    }
+  }
   if (plistValue(infoPath, "CFBundleIdentifier") !== tauriConfig.identifier) {
     throw new Error("Updater App bundle identifier does not match tauri.conf.json");
   }

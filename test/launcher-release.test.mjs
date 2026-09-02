@@ -5,6 +5,7 @@ import { test } from "node:test";
 const launcherSource = await readFile(new URL("../src-tauri/src/main.rs", import.meta.url), "utf8");
 const tauriConfig = JSON.parse(await readFile(new URL("../src-tauri/tauri.conf.json", import.meta.url), "utf8"));
 const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+const tauriBuild = await readFile(new URL("../scripts/tauri-build.mjs", import.meta.url), "utf8");
 const releaseWorkflow = await readFile(new URL("../.github/workflows/release-macos.yml", import.meta.url), "utf8");
 const checkWorkflow = await readFile(new URL("../.github/workflows/check.yml", import.meta.url), "utf8");
 
@@ -77,11 +78,14 @@ test("the launcher minimum system version matches the current Codex client requi
   assert.equal(tauriConfig.bundle.macOS.minimumSystemVersion, "14.0");
 });
 
-test("desktop build scripts pass the preparation target directly on every platform", () => {
-  assert.match(packageJson.scripts["app:build"], /prepare-tauri-app\.mjs --target universal-apple-darwin/);
-  assert.match(packageJson.scripts["app:build:linux:x64"], /prepare-tauri-app\.mjs --target x86_64-unknown-linux-gnu/);
-  assert.match(packageJson.scripts["app:build:windows"], /prepare-tauri-app\.mjs --target x86_64-pc-windows-msvc/);
-  assert.doesNotMatch(packageJson.scripts["app:build"], /app:prepare --/);
-  assert.doesNotMatch(packageJson.scripts["app:build:linux:x64"], /app:prepare --/);
-  assert.doesNotMatch(packageJson.scripts["app:build:windows"], /app:prepare --/);
+test("desktop build scripts prepare each target and preserve the Beta product name", () => {
+  assert.match(packageJson.scripts["app:build"], /app:prepare -- --target universal-apple-darwin/);
+  assert.match(packageJson.scripts["app:build:linux:x64"], /app:prepare -- --target x86_64-unknown-linux-gnu/);
+  assert.match(packageJson.scripts["app:build:windows"], /app:prepare -- --target x86_64-pc-windows-msvc/);
+  for (const scriptName of ["app:build", "app:build:linux:x64", "app:build:windows"]) {
+    assert.match(packageJson.scripts[scriptName], /node scripts\/tauri-build\.mjs --target/);
+  }
+  assert.match(tauriBuild, /CODEX_TASKBOARD_RELEASE_VERSION\?\.includes\("-beta\."\)/);
+  assert.match(tauriBuild, /\? "Codex Taskboard Beta"/);
+  assert.match(tauriBuild, /JSON\.stringify\(\{ productName \}\)/);
 });
