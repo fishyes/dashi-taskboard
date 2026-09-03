@@ -67,7 +67,9 @@ import { IssueListView } from "./components/IssueListView";
 import { JiraConnectionDialog } from "./components/JiraConnectionDialog";
 import { ArchivedTasksColumn, OtherTasksPanel } from "./components/OtherTasksPanel";
 import {
+  resolveInlineAttachmentMarkdown,
   resolveInlineMediaMarkdown,
+  type PendingInlineAttachment,
   type PendingInlineImage,
 } from "./components/InlineMediaComposer";
 import { LinearIcon } from "./components/LinearIcon";
@@ -759,6 +761,12 @@ export function App() {
   const [aiImportReadyProjectId, setAiImportReadyProjectId] = useState<string | null>(null);
   const [aiThreads, setAiThreads] = useState<AiChatThread[]>([]);
   const [aiOpenThreadRequest, setAiOpenThreadRequest] = useState<AiChatOpenThreadRequest | null>(null);
+  const aiOpenThreadRequestSequenceRef = useRef(0);
+  const handleAiOpenThreadRequestHandled = useCallback((requestId: number) => {
+    setAiOpenThreadRequest((current) => (
+      current?.requestId === requestId ? null : current
+    ));
+  }, []);
   const [readActivityKeys, setReadActivityKeys] = useState<Record<string, string>>({});
   const [codexThreadProgress, setCodexThreadProgress] = useState<
     Record<string, {
@@ -2429,7 +2437,7 @@ export function App() {
 
   async function saveEditor(
     draft: TaskDraft,
-    attachments: File[],
+    inlineFiles: PendingInlineAttachment[],
     inlineImages: PendingInlineImage[],
     createOptions?: NewTaskCreateOptions,
   ) {
@@ -2455,29 +2463,37 @@ export function App() {
           : project
       )));
     }
-    let failedAttachments = 0;
     let postCreateWriteFailed = false;
-    if (creating && (attachments.length > 0 || inlineImages.length > 0)) {
-      const [results, inlineResults] = await Promise.all([
+    if (creating && (inlineFiles.length > 0 || inlineImages.length > 0)) {
+      const [fileResults, inlineResults] = await Promise.all([
           Promise.allSettled(
-            attachments.map((file) => uploadAttachment(saved.id, file, "attachment")),
+            inlineFiles.map((file) => uploadAttachment(saved.id, file.file, "attachment")),
           ),
           Promise.allSettled(
             inlineImages.map((image) => uploadAttachment(saved.id, image.file, "inline")),
           ),
       ]);
-      failedAttachments = results.filter((result) => result.status === "rejected").length;
+      const fileAttachments = fileResults.flatMap((result) => (
+        result.status === "fulfilled" ? [result.value] : []
+      ));
       const inlineAttachments = inlineResults.flatMap((result) => (
         result.status === "fulfilled" ? [result.value] : []
       ));
-      if (inlineAttachments.length !== inlineImages.length) {
+      if (
+        fileAttachments.length !== inlineFiles.length
+        || inlineAttachments.length !== inlineImages.length
+      ) {
         postCreateWriteFailed = true;
-      } else if (inlineImages.length > 0) {
+      } else if (inlineFiles.length > 0 || inlineImages.length > 0) {
         try {
-          const description = resolveInlineMediaMarkdown(
-            draft.description,
-            inlineImages,
-            inlineAttachments,
+          const description = resolveInlineAttachmentMarkdown(
+            resolveInlineMediaMarkdown(
+              draft.description,
+              inlineImages,
+              inlineAttachments,
+            ),
+            inlineFiles,
+            fileAttachments,
           );
           saved = await updateTaskRequest(saved, { ...draft, description });
         } catch {
@@ -2525,17 +2541,13 @@ export function App() {
     ]));
     if (creating) setNewTaskDraft(null);
     const failedWrites = [
-        ...(relationWriteFailed ? [{ zh: "關係", en: "relations" }] : []),
-        ...(postCreateWriteFailed ? [{ zh: "正文或圖片", en: "description or images" }] : []),
-        ...(failedAttachments > 0 ? [{
-          zh: `${failedAttachments} 個附件`,
-        en: `${failedAttachments} attachment${failedAttachments === 1 ? "" : "s"}`,
-      }] : []),
+      ...(relationWriteFailed ? [{ zh: "關係", en: "relations" }] : []),
+      ...(postCreateWriteFailed ? [{ zh: "正文或媒體", en: "description or media" }] : []),
     ];
     if (!creating || !createOptions?.keepOpen || failedWrites.length > 0) setEditor(null);
-      if (failedWrites.length > 0) {
-        setActionError(text(
-          `${saved.identifier} 已建立，但以下內容寫入失敗：${failedWrites.map((failure) => failure.zh).join("、")}。`,
+    if (failedWrites.length > 0) {
+      setActionError(text(
+        `${saved.identifier} 已建立，但以下內容寫入失敗：${failedWrites.map((failure) => failure.zh).join("、")}。`,
         `${saved.identifier} was created, but these follow-up writes failed: ${failedWrites.map((failure) => failure.en).join(", ")}.`,
       ));
     }
@@ -2996,10 +3008,11 @@ export function App() {
 
   function openTaskConversation(conversation: TaskConversationItem) {
     if (conversation.kind === "local-ai" && conversation.aiThreadId) {
-      setAiOpenThreadRequest((current) => ({
+      aiOpenThreadRequestSequenceRef.current += 1;
+      setAiOpenThreadRequest({
         threadId: conversation.aiThreadId!,
-        requestId: (current?.requestId ?? 0) + 1,
-      }));
+        requestId: aiOpenThreadRequestSequenceRef.current,
+      });
       return;
     }
     if (conversation.threadBinding) {
@@ -3987,15 +4000,18 @@ export function App() {
               <button
                 className="button primary"
                 type="button"
-                onClick={() => setAiOpenThreadRequest((current) => ({
-                  projectId: selectedProject.id,
-                  issueId: null,
-                  composerText: text(
-                    "只檢查目前專案目錄對應的 Codex 對話。請將其中已完成、處理中和待執行的任務整理並匯入目前專案的 Taskboard。",
-                    "Only inspect Codex conversations associated with this project directory. Organize completed, in-progress, and pending tasks, then import them into this project's Taskboard.",
-                  ),
-                  requestId: (current?.requestId ?? 0) + 1,
-                }))}
+                onClick={() => {
+                  aiOpenThreadRequestSequenceRef.current += 1;
+                  setAiOpenThreadRequest({
+                    projectId: selectedProject.id,
+                    issueId: null,
+                    composerText: text(
+                      "只檢查目前專案目錄對應的 Codex 對話。請將其中已完成、處理中和待執行的任務整理並匯入目前專案的 Taskboard。",
+                      "Only inspect Codex conversations associated with this project directory. Organize completed, in-progress, and pending tasks, then import them into this project's Taskboard.",
+                    ),
+                    requestId: aiOpenThreadRequestSequenceRef.current,
+                  });
+                }}
               >
                 {text("匯入目前專案任務狀態", "Import current project task status")}
               </button>
@@ -4452,6 +4468,7 @@ export function App() {
             codexProjectIdentity={selectedCodexProjectIdentity}
             onThreadsChange={setAiThreads}
             openThreadRequest={aiOpenThreadRequest}
+            onOpenThreadRequestHandled={handleAiOpenThreadRequestHandled}
           />
         </Suspense>
       )}

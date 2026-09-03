@@ -647,31 +647,15 @@ jobs:
             "$RELEASE_ASSETS/Codex.Taskboard_${PACKAGE_VERSION}_universal.app.tar.gz.sig" \
             "$RELEASE_ASSETS/latest.json"
 
-  approve-stable-release:
-    name: Approve stable release
-    needs:
-      - release-preflight
-      - draft-release
-    if: ${{ needs['release-preflight'].outputs.prerelease == 'false' }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    environment: macos-release
-
-    steps:
-      - name: Confirm protected stable promotion
-        env:
-          RELEASE_TAG: ${{ needs['release-preflight'].outputs.release_tag }}
-        run: echo "Approved stable promotion for $RELEASE_TAG"
-
   promote-release:
     name: Verify and publish immutable release
     needs:
       - release-preflight
       - draft-release
-      - approve-stable-release
-    if: ${{ !cancelled() && needs['release-preflight'].result == 'success' && needs['draft-release'].result == 'success' && (needs['release-preflight'].outputs.prerelease == 'true' || needs['approve-stable-release'].result == 'success') }}
+    if: ${{ !cancelled() && needs['release-preflight'].result == 'success' && needs['draft-release'].result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    environment: macos-release
     env:
       RELEASE_TAG: ${{ needs['release-preflight'].outputs.release_tag }}
       PACKAGE_VERSION: ${{ needs['release-preflight'].outputs.package_version }}
