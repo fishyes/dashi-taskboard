@@ -31,6 +31,13 @@ import {
   CdpPipeBrowser,
   validatedLoopbackCdpWebSocketUrl,
 } from "./codex-cdp-pipe.mjs";
+import {
+  activateWindowsCodex,
+  stopWindowsCodex,
+  windowsCodexProcesses,
+  windowsCodexProfileArgument,
+  windowsRootProcesses,
+} from "./windows-codex.mjs";
 
 const injectorPath = fileURLToPath(import.meta.url);
 const projectRoot = path.resolve(path.dirname(injectorPath), "..");
@@ -388,34 +395,11 @@ function codexAppBundleBuild(appPath) {
 
 function codexAppProcesses(appPath) {
   if (process.platform === "win32") {
-    const script = [
-      "$ErrorActionPreference = 'Stop';",
-      "Get-CimInstance Win32_Process -Filter \"Name='ChatGPT.exe' OR Name='Codex.exe'\"",
-      "| Where-Object { $_.CommandLine -and $_.CommandLine -notlike '* --type=*' }",
-      "| ForEach-Object { [PSCustomObject]@{ pid = [int]$_.ProcessId; command = [string]$_.CommandLine } }",
-      "| ConvertTo-Json -Compress",
-    ].join(" ");
-    const processes = spawnSync(
-      "powershell.exe",
-      ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script],
-      {
-        encoding: "utf8",
-        env: withoutTaskboardLauncherEnvironment(process.env),
-        maxBuffer: 4 * 1024 * 1024,
-      },
+    return windowsCodexProcesses(
+      appPath,
+      withoutTaskboardLauncherEnvironment(process.env),
     );
-    if (processes.status !== 0) {
-      throw new Error("Unable to inspect the launched Codex process");
-    }
-    const output = processes.stdout.trim();
-    if (!output) return [];
-    const records = JSON.parse(output);
-    return (Array.isArray(records) ? records : [records]).map((record) => ({
-      pid: Number(record.pid),
-      command: record.command,
-    }));
   }
-
   const processes = spawnSync("/bin/ps", ["-ww", "-axo", "pid=,command="], {
     encoding: "utf8",
     env: withoutTaskboardLauncherEnvironment(process.env),
@@ -456,10 +440,14 @@ function codexUpdateReplacementProcess(appPath, exitedPid, previousBuild) {
 }
 
 function managedCodexProcesses(appPath) {
-  const profileArgument = `--user-data-dir=${independentCodexProfilePath}`;
-  return codexAppProcesses(appPath).filter((record) => (
-    record.command.includes(` ${profileArgument} `)
+  const processes = codexAppProcesses(appPath);
+  const managed = processes.filter((record) => (
+    process.platform === "win32"
+      ? windowsCodexProfileArgument(record.command, independentCodexProfilePath)
+      : record.command.includes(` --user-data-dir=${independentCodexProfilePath} `)
   ));
+  if (process.platform !== "win32") return managed;
+  return windowsRootProcesses(managed);
 }
 
 function managedCodexProcess(appPath) {
@@ -480,6 +468,10 @@ function managedCodexUsesPort(record, port) {
 }
 
 function isManagedCodexRunning(record) {
+  if (process.platform === "win32") {
+    return codexAppProcesses(record.executable)
+      .some((candidate) => candidate.pid === record.pid && candidate.command === record.command);
+  }
   const result = spawnSync(
     "/bin/ps",
     ["-ww", "-p", String(record.pid), "-o", "command="],
@@ -501,42 +493,58 @@ async function launchCodexWithLaunchServices(appPath, port, shouldStop = () => f
   }
   if (shouldStop()) throw new Error("Managed Codex launch stopped");
 
-  const launcher = spawn(
-    "/usr/bin/open",
-    [
-      "-a",
+  if (process.platform === "win32") {
+    activateWindowsCodex(
       appPath,
-      "--args",
-      `--user-data-dir=${independentCodexProfilePath}`,
-      "--remote-debugging-address=127.0.0.1",
-      `--remote-debugging-port=${port}`,
-      `--remote-allow-origins=http://127.0.0.1:${port}`,
-    ],
-    {
-      env: withoutTaskboardLauncherEnvironment(process.env),
-      stdio: "ignore",
-    },
-  );
-  await new Promise((resolve, reject) => {
-    launcher.once("error", reject);
-    launcher.once("exit", (code, signal) => {
-      if (code === 0) resolve();
-      else reject(new Error(`LaunchServices failed to start Codex (${signal || code})`));
+      independentCodexProfilePath,
+      port,
+      withoutTaskboardLauncherEnvironment(process.env),
+    );
+  } else {
+    const launcher = spawn(
+      "/usr/bin/open",
+      [
+        "-a",
+        appPath,
+        "--args",
+        `--user-data-dir=${independentCodexProfilePath}`,
+        "--remote-debugging-address=127.0.0.1",
+        `--remote-debugging-port=${port}`,
+        `--remote-allow-origins=http://127.0.0.1:${port}`,
+      ],
+      {
+        env: withoutTaskboardLauncherEnvironment(process.env),
+        stdio: "ignore",
+      },
+    );
+    await new Promise((resolve, reject) => {
+      launcher.once("error", reject);
+      launcher.once("exit", (code, signal) => {
+        if (code === 0) resolve();
+        else reject(new Error(`LaunchServices failed to start Codex (${signal || code})`));
+      });
     });
-  });
+  }
 
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
     const launched = managedCodexProcess(appPath);
     if (launched && managedCodexUsesPort(launched, port)) return launched;
-    if (launched) throw new Error("LaunchServices started Codex on an unexpected CDP port");
+    if (launched) throw new Error("The platform launcher started Codex on an unexpected CDP port");
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  throw new Error("LaunchServices did not start the managed Codex process");
+  throw new Error("The platform launcher did not start the managed Codex process");
 }
 
 async function stopManagedCodex(record) {
   if (!isManagedCodexRunning(record)) return;
+  if (process.platform === "win32") {
+    stopWindowsCodex(
+      record.pid,
+      withoutTaskboardLauncherEnvironment(process.env),
+    );
+    return;
+  }
   try {
     process.kill(record.pid, "SIGTERM");
   } catch (error) {
@@ -3088,17 +3096,7 @@ async function main() {
       if (nativeCodexBrowser) {
         const deepLink = new URL("codex://threads/new");
         deepLink.searchParams.set("browserUrl", taskboardPageUrl);
-        await new Promise((resolve, reject) => {
-          const child = spawn("/usr/bin/open", [deepLink.toString()], {
-            env: withoutTaskboardLauncherEnvironment(process.env),
-            stdio: "ignore",
-          });
-          child.once("error", reject);
-          child.once("close", (code) => {
-            if (code === 0) resolve();
-            else reject(new Error(`LaunchServices could not open Taskboard (${code})`));
-          });
-        });
+        await openWithDefaultApplication(deepLink.toString());
         openedRequestGeneration = Math.max(openedRequestGeneration, generation);
         console.log(JSON.stringify({ openedTaskboardInExistingCodex: true }));
         return true;

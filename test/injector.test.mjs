@@ -333,15 +333,21 @@ test("the package injection command remains resident for tab-triggered recovery"
   assert.match(source, /__codexTaskboardHostStartupTokenV1/);
 });
 
-test("the resident injector inspects the Windows Codex process without macOS ps", () => {
+test("the resident injector delegates Windows process inspection without macOS ps", () => {
   const processSource = source.slice(
     source.indexOf("function codexAppProcesses"),
     source.indexOf("function managedCodexProcesses"),
   );
   assert.match(processSource, /process\.platform === "win32"/);
-  assert.match(processSource, /Get-CimInstance Win32_Process/);
-  assert.match(processSource, /Name='ChatGPT\.exe' OR Name='Codex\.exe'/);
-  assert.match(processSource, /-notlike '\* --type=\*'/);
+  assert.match(processSource, /return windowsCodexProcesses\(/);
+  assert.match(processSource, /withoutTaskboardLauncherEnvironment\(process\.env\)/);
+});
+
+test("the existing-Codex fallback opens its deep link with the platform default application", () => {
+  assert.match(
+    source,
+    /deepLink\.searchParams\.set\("browserUrl", taskboardPageUrl\);\s*await openWithDefaultApplication\(deepLink\.toString\(\)\);/,
+  );
 });
 
 test("attach reconciles the renderer against a hashed current injection source", () => {
