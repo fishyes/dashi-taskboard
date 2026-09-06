@@ -1615,11 +1615,11 @@ function segmentsFromEditorDocument(
   return selfContainedClipboardSegments(normalizeSegments(restored.map((segment, index) => {
     if (segment.type !== "text") return segment;
     let value = segment.text;
-    if (isMediaAtomSegment(restored[index - 1]) && value.startsWith("\n\n")) {
-      value = value.slice(2);
+    if (isTaskboardAttachmentMedia(restored[index - 1]) && value.startsWith("\n")) {
+      value = value.slice(1);
     }
-    if (isMediaAtomSegment(restored[index + 1]) && value.endsWith("\n\n")) {
-      value = value.slice(0, -2);
+    if (isTaskboardAttachmentMedia(restored[index + 1]) && value.endsWith("\n")) {
+      value = value.slice(0, -1);
     }
     return value === segment.text ? segment : { ...segment, text: value };
   })));
