@@ -11,17 +11,22 @@ const currentUser: ActorIdentity = {
 };
 
 const oldTodoDraft: NewTaskEditorDraft = {
-  title: "保留的草稿标题",
+  title: "保留的草稿標題",
   descriptionSegments: [{ id: "draft-description", type: "text", text: "保留的草稿描述" }],
   status: "todo",
   priority: "high",
   assignee: currentUser,
-  selectedLabels: ["回归证据"],
+  selectedLabels: ["迴歸證據"],
   developmentContext: null,
   startDate: "",
   dueDate: "",
   recurrence: null,
   attachments: [],
+  relations: {
+    parentId: null,
+    relatedIds: [],
+    subIssueIds: [],
+  },
 };
 
 function publishResult(draft: TaskDraft) {
@@ -31,12 +36,14 @@ function publishResult(draft: TaskDraft) {
 createRoot(document.getElementById("root")!).render(
   <TaskEditor
     task={null}
+    tasks={[]}
     initialStatus="in_progress"
     initialDraft={oldTodoDraft}
-    labels={["回归证据"]}
+    labels={["迴歸證據"]}
     currentUser={currentUser}
     developmentScan={{ workspacePath: null, contexts: [] }}
     developmentScanLoading={false}
+    onCreateLabel={async () => {}}
     onCancel={() => {}}
     onSave={async (draft) => publishResult(draft)}
   />,

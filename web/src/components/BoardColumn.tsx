@@ -4,70 +4,26 @@ import type { ActorIdentity, Task, TaskDraft, TaskStatus } from "../types";
 import { taskStatusLabel, useTaskboardI18n } from "../i18n";
 import type { TaskCardPresentation, TaskConversationItem } from "../taskConversations";
 import { TaskCard } from "./TaskCard";
-import {
-  TaskboardIcon,
-  taskboardIconSource,
-  type TaskboardIconName,
-} from "./TaskboardIcon";
+import { PlusIcon, StatusIcon } from "./SemanticIcons";
 
 export const STATUS_DETAILS: Record<
   TaskStatus,
   { label: string; tone: string }
 > = {
-  backlog: { label: "待立项", tone: "backlog" },
-  todo: { label: "等待认领", tone: "todo" },
-  in_progress: { label: "处理中", tone: "progress" },
-  in_review: { label: "等你确认", tone: "review" },
-  blocked: { label: "遇到阻碍", tone: "blocked" },
+  backlog: { label: "待規劃", tone: "backlog" },
+  todo: { label: "待認領", tone: "todo" },
+  in_progress: { label: "處理中", tone: "progress" },
+  in_review: { label: "等你確認", tone: "review" },
+  blocked: { label: "遇到阻礙", tone: "blocked" },
   done: { label: "完成", tone: "done" },
   canceled: { label: "取消", tone: "canceled" },
 };
-
-const STATUS_ICONS: Record<TaskStatus, TaskboardIconName> = {
-  backlog: "statusTodo",
-  todo: "statusTodo",
-  in_progress: "statusProgress",
-  in_review: "statusReview",
-  blocked: "statusBlocked",
-  done: "statusReview",
-  canceled: "statusBlocked",
-};
-
-const COLUMN_STATUS_ICONS: Record<TaskStatus, TaskboardIconName> = {
-  backlog: "statusTodo",
-  todo: "columnStatusTodo",
-  in_progress: "columnStatusProgress",
-  in_review: "columnStatusReview",
-  blocked: "columnStatusBlocked",
-  done: "statusReview",
-  canceled: "statusBlocked",
-};
-
-const COLUMN_ADD_ICONS: Partial<Record<TaskStatus, TaskboardIconName>> = {
-  todo: "columnAddTodo",
-  in_progress: "columnAddProgress",
-  in_review: "columnAddReview",
-  blocked: "columnAddBlocked",
-};
-
-export function statusIconSource(status: TaskStatus) {
-  return taskboardIconSource(STATUS_ICONS[status]);
-}
-
-export function StatusIcon({ status }: { status: TaskStatus }) {
-  return <TaskboardIcon name={STATUS_ICONS[status]} />;
-}
-
-function ColumnStatusIcon({ status }: { status: TaskStatus }) {
-  return <TaskboardIcon name={COLUMN_STATUS_ICONS[status]} />;
-}
 
 interface BoardColumnProps {
   scrollRef: (element: HTMLDivElement | null) => void;
   status: TaskStatus;
   tasks: Task[];
   presentations: Record<string, TaskCardPresentation>;
-  now: number;
   emptyMessage: string;
   isDropTarget: boolean;
   draggedTaskId: string | null;
@@ -76,11 +32,16 @@ interface BoardColumnProps {
   settlingTaskId: string | null;
   contextMenuTaskId: string | null;
   availableLabels: string[];
+  projectNames?: Record<string, string>;
   currentUser: ActorIdentity;
+  showCover: boolean;
+  showBody: boolean;
+  createEnabled?: boolean;
+  onCreateLabel: (label: string, projectId?: string) => Promise<void>;
   onCreate: (status: TaskStatus) => void;
   onEdit: (task: Task) => void;
   onUpdate: (task: Task, changes: Partial<TaskDraft>) => Promise<Task>;
-  onComplete: (task: Task) => void;
+  onComplete: (task: Task) => Promise<void>;
   onContextMenu: (task: Task, position: { x: number; y: number }) => void;
   onDragStart: (task: Task, height: number) => void;
   onDragEnd: () => void;
@@ -94,7 +55,6 @@ export function BoardColumn({
   status,
   tasks,
   presentations,
-  now,
   emptyMessage,
   isDropTarget,
   draggedTaskId,
@@ -103,7 +63,12 @@ export function BoardColumn({
   settlingTaskId,
   contextMenuTaskId,
   availableLabels,
+  projectNames,
   currentUser,
+  showCover,
+  showBody,
+  createEnabled = true,
+  onCreateLabel,
   onCreate,
   onEdit,
   onUpdate,
@@ -181,21 +146,25 @@ export function BoardColumn({
       <header className="column-header">
         <div className="column-heading">
           <span className={`column-status-icon status-icon-${details.tone}`}>
-            <ColumnStatusIcon status={status} />
+            <StatusIcon status={status} color="var(--column-status-color)" size={14} />
           </span>
-          <h2 id={`column-${status}`}>{label}</h2>
+          <h2 id={`column-${status}`}>
+            {label}{tasks.length > 0 ? ` ${tasks.length}` : ""}
+          </h2>
         </div>
-        <div className="column-actions">
-          <button
-            type="button"
-            className="icon-button add-task-button"
-            onClick={() => onCreate(status)}
-            aria-label={text(`在${label}中新建议题`, `Create issue in ${label}`)}
-            title={text(`添加到${label}`, `Add to ${label}`)}
-          >
-            <TaskboardIcon name={COLUMN_ADD_ICONS[status] ?? "columnAdd"} />
-          </button>
-        </div>
+        {createEnabled && (
+          <div className="column-actions">
+            <button
+              type="button"
+              className="icon-button add-task-button"
+              onClick={() => onCreate(status)}
+              aria-label={text(`在${label}中新增議題`, `Create issue in ${label}`)}
+              title={text(`新增到${label}`, `Add to ${label}`)}
+            >
+              <PlusIcon color="var(--column-status-color)" size={12} />
+            </button>
+          </div>
+        )}
       </header>
 
       <div className="column-list" ref={scrollRef}>
@@ -206,14 +175,17 @@ export function BoardColumn({
               key={task.id}
               task={task}
               presentation={presentations[task.id]}
-              now={now}
               isDragging={draggedTaskId === task.id}
               dragShift={dragShift}
               isMoving={movingTaskId === task.id}
               isSettling={settlingTaskId === task.id}
               isContextMenuOpen={contextMenuTaskId === task.id}
               availableLabels={availableLabels}
+              projectName={projectNames?.[task.projectId]}
               currentUser={currentUser}
+              showCover={showCover}
+              showBody={showBody}
+              onCreateLabel={(label) => onCreateLabel(label, task.projectId)}
               onEdit={onEdit}
               onUpdate={onUpdate}
               onComplete={onComplete}

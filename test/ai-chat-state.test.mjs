@@ -9,13 +9,10 @@ import {
   chatPrimaryAction,
   createAiSnapshotRefreshQueue,
   filterVisibleAiEvents,
-  isAiChatCapabilityAvailable,
   needsDangerConfirmation,
   normalizeChatSelection,
   parseAiChatComposerFragment,
   patchAiChatSnapshot,
-  routeChatState,
-  shouldRefreshAiSnapshot,
 } from "../web/src/aiChatState.ts";
 
 const models = [
@@ -37,12 +34,6 @@ const models = [
   },
 ];
 
-test("AI chat is exposed only when the local capability is explicit", () => {
-  assert.equal(isAiChatCapabilityAvailable({ localAiChat: true }), true);
-  assert.equal(isAiChatCapabilityAvailable({ localAiChat: false }), false);
-  assert.equal(isAiChatCapabilityAvailable(undefined), false);
-});
-
 test("new threads freeze the current project and optional issue as server identifiers", () => {
   assert.deepEqual(buildThreadCreateInput("project-1", "issue-1"), {
     projectId: "project-1",
@@ -52,21 +43,6 @@ test("new threads freeze the current project and optional issue as server identi
     projectId: "project-1",
   });
   assert.equal(buildThreadCreateInput("", null), null);
-});
-
-test("route changes update only the next origin and preserve the selected global thread", () => {
-  assert.deepEqual(
-    routeChatState(
-      { selectedThreadId: "thread-a", pendingProjectId: "project-a", pendingIssueId: "issue-a" },
-      "project-b",
-      "issue-b",
-    ),
-    {
-      selectedThreadId: "thread-a",
-      pendingProjectId: "project-b",
-      pendingIssueId: "issue-b",
-    },
-  );
 });
 
 test("PATCH results can update only the snapshot for the thread that started the request", () => {
@@ -112,41 +88,27 @@ test("model and effort selections are restricted to the real catalog", () => {
 
 test("skill composer fragments keep opaque markers aligned with selected real ids", () => {
   assert.deepEqual(parseAiChatComposerFragment(JSON.stringify({
-    message: `请用 ${AI_CHAT_SKILL_MARKER} 检查`,
+    message: `請用 ${AI_CHAT_SKILL_MARKER} 檢查`,
     skillIds: ["cloudflare"],
   }), ["cloudflare"]), {
-    message: `请用 ${AI_CHAT_SKILL_MARKER} 检查`,
+    message: `請用 ${AI_CHAT_SKILL_MARKER} 檢查`,
     skillIds: ["cloudflare"],
   });
 });
 
 test("turn input cannot contain cwd, hidden context, model overrides or arbitrary args", () => {
-  const input = buildTurnInput(`检查 ${AI_CHAT_SKILL_MARKER} LOCAL-103`, ["cloudflare"], false);
+  const input = buildTurnInput(`檢查 ${AI_CHAT_SKILL_MARKER} LOCAL-103`, ["cloudflare"], false);
   assert.deepEqual(input, {
-    message: `检查 ${AI_CHAT_SKILL_MARKER} LOCAL-103`,
+    message: `檢查 ${AI_CHAT_SKILL_MARKER} LOCAL-103`,
     skillIds: ["cloudflare"],
   });
   assert.equal(JSON.stringify(input).includes("workspacePath"), false);
   assert.equal(JSON.stringify(input).includes("manage-taskboard"), false);
   assert.equal(JSON.stringify(input).includes("model"), false);
-  assert.deepEqual(buildTurnInput("执行", [], true), {
-    message: "执行",
+  assert.deepEqual(buildTurnInput("執行", [], true), {
+    message: "執行",
     dangerFullAccessConfirmed: true,
   });
-});
-
-test("runtime controls distinguish send, stop, danger confirmation and SSE refresh hints", () => {
-  assert.equal(chatPrimaryAction("running", "hello"), "stop");
-  assert.equal(chatPrimaryAction("idle", "hello"), "send");
-  assert.equal(chatPrimaryAction("idle", "  "), "disabled");
-  assert.equal(chatPrimaryAction("idle", "hello", true), "disabled");
-  assert.equal(chatPrimaryAction("running", "hello", true), "disabled");
-  assert.equal(needsDangerConfirmation("danger-full-access", false), true);
-  assert.equal(needsDangerConfirmation("danger-full-access", true), false);
-  assert.equal(needsDangerConfirmation("workspace-write", false), false);
-  assert.equal(shouldRefreshAiSnapshot("ai.event"), true);
-  assert.equal(shouldRefreshAiSnapshot("ai.run"), true);
-  assert.equal(shouldRefreshAiSnapshot("unrelated"), false);
 });
 
 test("visible activity keeps only the latest lifecycle item without merging messages", () => {
@@ -155,14 +117,14 @@ test("visible activity keeps only the latest lifecycle item without merging mess
       id: "1",
       type: "agent_message",
       role: "assistant",
-      content: "公开回复一",
+      content: "公開回復一",
       data: { itemId: "shared-message" },
     },
     {
       id: "2",
       type: "agent_message",
       role: "assistant",
-      content: "公开回复二",
+      content: "公開回復二",
       data: { itemId: "shared-message" },
     },
     {
@@ -186,10 +148,10 @@ test("visible activity keeps only the latest lifecycle item without merging mess
       content: "npm test",
       data: { itemId: "command-1", status: "completed" },
     },
-    { id: "6", type: "todo_list", role: "activity", content: "完成测试" },
-    { id: "7", type: "turn.failed", role: "error", content: "执行失败" },
-    { id: "8", type: "user_message", role: "user", content: "第一条", data: { itemId: "user-1" } },
-    { id: "9", type: "user_message", role: "user", content: "第二条", data: { itemId: "user-1" } },
+    { id: "6", type: "todo_list", role: "activity", content: "完成測試" },
+    { id: "7", type: "turn.failed", role: "error", content: "執行失敗" },
+    { id: "8", type: "user_message", role: "user", content: "第一條", data: { itemId: "user-1" } },
+    { id: "9", type: "user_message", role: "user", content: "第二條", data: { itemId: "user-1" } },
     { id: "10", type: "reasoning", role: "activity", content: "private chain of thought" },
     { id: "11", type: "raw_jsonl", role: "activity", content: "{\"secret\":true}" },
   ]);
@@ -224,6 +186,13 @@ test("activity status treats started, running and in_progress as active and fail
     content: "",
     data: { status: "completed" },
   }), "completed");
+  assert.equal(aiChatEventStatus({
+    id: "5",
+    type: "error",
+    role: "activity",
+    content: "Skill descriptions were shortened",
+    data: { status: "warning" },
+  }), "completed");
 });
 
 test("snapshot hint refreshes allow one in-flight request and one queued request", async () => {
@@ -254,7 +223,7 @@ test("snapshot hint refreshes allow one in-flight request and one queued request
 
 test("reasoning and raw JSONL events are excluded from the visible timeline", () => {
   const events = filterVisibleAiEvents([
-    { id: "1", type: "agent_message", role: "assistant", content: "公开回复" },
+    { id: "1", type: "agent_message", role: "assistant", content: "公開回復" },
     { id: "2", type: "reasoning", role: "activity", content: "private chain of thought" },
     { id: "3", type: "raw_jsonl", role: "activity", content: "{\"secret\":true}" },
     { id: "4", type: "command", role: "activity", content: "npm test" },

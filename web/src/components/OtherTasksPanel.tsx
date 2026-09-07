@@ -1,15 +1,12 @@
 import { useEffect, useState } from "react";
-import type { DragEvent } from "react";
+import type { CSSProperties, DragEvent } from "react";
 import type { ActorIdentity, Task, TaskDraft, TaskStatus } from "../types";
 import type { TaskCardPresentation, TaskConversationItem } from "../taskConversations";
 import { taskStatusLabel, useTaskboardI18n } from "../i18n";
-import {
-  OTHER_TASK_TABS,
-  type OtherTaskTab,
-} from "../issueBoardStatuses";
-import { LinearIcon, LinearStatusIcon } from "./LinearIcon";
+import type { OtherTaskTab } from "../issueBoardStatuses";
+import { LinearIcon } from "./LinearIcon";
+import { DeleteIcon, PlusIcon, RefreshIcon, StatusIcon } from "./SemanticIcons";
 import { TaskCard } from "./TaskCard";
-import { TaskboardIcon } from "./TaskboardIcon";
 
 function archivedDate(
   value: string | null,
@@ -19,7 +16,7 @@ function archivedDate(
   if (!value) return "";
   const formatted = new Intl.DateTimeFormat(locale, { month: "numeric", day: "numeric" })
     .format(new Date(value));
-  return text(`${formatted}归档`, `Archived ${formatted}`);
+  return text(`${formatted}歸檔`, `Archived ${formatted}`);
 }
 
 interface ArchivedTaskCardProps {
@@ -38,49 +35,107 @@ function ArchivedTaskCard({
   onDelete,
 }: ArchivedTaskCardProps) {
   const { language, locale, text } = useTaskboardI18n();
+  const displayIdentifier = task.externalKey ?? task.identifier;
   return (
     <article className={`task-card task-card-sidebar archived-task-card status-${task.status}`}>
       <div className="card-topline">
-        <span className="task-identifier">ID: {task.identifier}</span>
+        <span className="task-identifier">ID: {displayIdentifier}</span>
         <span className="archived-task-date">{archivedDate(task.archivedAt, locale, text)}</span>
       </div>
       <h3>{task.title}</h3>
       <div className="archived-task-footer">
         <span className="archived-task-status">
-          <LinearStatusIcon status={task.status} />
+          <StatusIcon status={task.status} size={14} />
           {taskStatusLabel(language, task.status)}
         </span>
-        <button
-          className="archived-task-action archived-task-restore"
-          type="button"
-          disabled={busy}
-          onClick={() => onRestore(task)}
-        >
-          <LinearIcon name="recurrence" />
-          {restoring ? text("恢复中…", "Restoring…") : text("恢复", "Restore")}
-        </button>
-        <button
-          className="archived-task-action archived-task-delete"
-          type="button"
-          aria-label={text(`永久删除 ${task.identifier}`, `Permanently delete ${task.identifier}`)}
-          title={text("永久删除", "Delete permanently")}
-          disabled={busy}
-          onClick={() => onDelete(task)}
-        >
-          <LinearIcon name="trash" />
-        </button>
+        {task.source !== "jira" && (
+          <>
+            <button
+              className="archived-task-action archived-task-restore"
+              type="button"
+              disabled={busy}
+              onClick={() => onRestore(task)}
+            >
+              <RefreshIcon color="currentColor" />
+              {restoring ? text("恢復中…", "Restoring…") : text("恢復", "Restore")}
+            </button>
+            <button
+              className="archived-task-action archived-task-delete"
+              type="button"
+              aria-label={text(`永久刪除 ${displayIdentifier}`, `Permanently delete ${displayIdentifier}`)}
+              title={text("永久刪除", "Delete permanently")}
+              disabled={busy}
+              onClick={() => onDelete(task)}
+            >
+              <DeleteIcon color="currentColor" />
+            </button>
+          </>
+        )}
       </div>
     </article>
+  );
+}
+
+interface ArchivedTasksColumnProps {
+  tasks: Task[];
+  hasActiveFilters: boolean;
+  restoringTaskId: string | null;
+  deletingTaskId: string | null;
+  onRestore: (task: Task) => void;
+  onDelete: (task: Task) => void;
+}
+
+export function ArchivedTasksColumn({
+  tasks,
+  hasActiveFilters,
+  restoringTaskId,
+  deletingTaskId,
+  onRestore,
+  onDelete,
+}: ArchivedTasksColumnProps) {
+  const { text } = useTaskboardI18n();
+  return (
+    <section className="board-column status-archived" aria-labelledby="column-archived">
+      <header className="column-header">
+        <div className="column-heading">
+          <span className="column-status-icon">
+            <DeleteIcon color="var(--column-status-color)" size={14} />
+          </span>
+          <h2 id="column-archived">
+            {text("已歸檔", "Archived")}{tasks.length > 0 ? ` ${tasks.length}` : ""}
+          </h2>
+        </div>
+      </header>
+      <div className="column-list">
+        {tasks.map((task) => (
+          <ArchivedTaskCard
+            key={task.id}
+            task={task}
+            busy={restoringTaskId !== null || deletingTaskId !== null}
+            restoring={restoringTaskId === task.id}
+            onRestore={onRestore}
+            onDelete={onDelete}
+          />
+        ))}
+        {tasks.length === 0 && (
+          <div className="column-empty">
+            {hasActiveFilters
+              ? text("目前篩選下無匹配議題", "No issues match the current filters")
+              : text("沒有已歸檔議題。", "There are no archived issues.")}
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 
 interface OtherTasksPanelProps {
   open: boolean;
   activeTab: OtherTaskTab;
+  tabs: readonly OtherTaskTab[];
   tasksByStatus: Record<TaskStatus, Task[]>;
   archivedTasks: Task[];
   presentations: Record<string, TaskCardPresentation>;
-  now: number;
   hasActiveFilters: boolean;
   isDropTarget: boolean;
   draggedTaskId: string | null;
@@ -89,11 +144,15 @@ interface OtherTasksPanelProps {
   settlingTaskId: string | null;
   contextMenuTaskId: string | null;
   availableLabels: string[];
+  projectNames?: Record<string, string>;
   currentUser: ActorIdentity;
+  showCover: boolean;
+  showBody: boolean;
+  onCreateLabel: (label: string, projectId?: string) => Promise<void>;
   restoringTaskId: string | null;
   deletingTaskId: string | null;
   onTabChange: (tab: OtherTaskTab) => void;
-  onCreate: (status: Exclude<OtherTaskTab, "archived">) => void;
+  onCreate?: (status: Exclude<OtherTaskTab, "archived">) => void;
   onRestore: (task: Task) => void;
   onDelete: (task: Task) => void;
   onEdit: (task: Task) => void;
@@ -109,10 +168,10 @@ interface OtherTasksPanelProps {
 export function OtherTasksPanel({
   open,
   activeTab,
+  tabs,
   tasksByStatus,
   archivedTasks,
   presentations,
-  now,
   hasActiveFilters,
   isDropTarget,
   draggedTaskId,
@@ -121,7 +180,11 @@ export function OtherTasksPanel({
   settlingTaskId,
   contextMenuTaskId,
   availableLabels,
+  projectNames,
   currentUser,
+  showCover,
+  showBody,
+  onCreateLabel,
   restoringTaskId,
   deletingTaskId,
   onTabChange,
@@ -140,7 +203,7 @@ export function OtherTasksPanel({
   const { language, text } = useTaskboardI18n();
   const archived = activeTab === "archived";
   const activeLabel = archived
-    ? text("已归档", "Archived")
+    ? text("已歸檔", "Archived")
     : taskStatusLabel(language, activeTab);
   const tasks = archived ? archivedTasks : tasksByStatus[activeTab];
   const [dropBeforeTaskId, setDropBeforeTaskId] = useState<string | null | undefined>();
@@ -190,13 +253,18 @@ export function OtherTasksPanel({
     <aside
       className={`other-tasks-panel${open ? " is-open" : ""}`}
       id="other-tasks-panel"
-      aria-label={text("其他任务", "Other issues")}
+      aria-label={text("其他任務", "Other issues")}
       aria-hidden={!open}
     >
-      <div className="other-tasks-tabs" role="tablist" aria-label={text("其他任务状态", "Other issue statuses")}>
-        {OTHER_TASK_TABS.map((tab) => {
+      <div
+        className="other-tasks-tabs"
+        role="tablist"
+        aria-label={text("其他任務狀態", "Other issue statuses")}
+        style={{ "--other-task-tab-count": tabs.length } as CSSProperties}
+      >
+        {tabs.map((tab) => {
           const label = tab === "archived"
-            ? text("已归档", "Archived")
+            ? text("已歸檔", "Archived")
             : taskStatusLabel(language, tab);
           const count = tab === "archived" ? archivedTasks.length : tasksByStatus[tab].length;
           const selected = tab === activeTab;
@@ -213,7 +281,7 @@ export function OtherTasksPanel({
               onClick={() => onTabChange(tab)}
             >
               <span className="other-tasks-tab-label">{label}</span>
-              <span className="other-tasks-tab-count" aria-label={text(`${count} 个议题`, `${count} issues`)}>
+              <span className="other-tasks-tab-count" aria-label={text(`${count} 個議題`, `${count} issues`)}>
                 {count}
               </span>
             </button>
@@ -221,15 +289,15 @@ export function OtherTasksPanel({
         })}
       </div>
 
-      {!archived && (
+      {!archived && onCreate && (
         <button
           className="other-tasks-add"
           type="button"
-          aria-label={text(`在${activeLabel}中新建议题`, `Create issue in ${activeLabel}`)}
-          title={text(`添加到${activeLabel}`, `Add to ${activeLabel}`)}
+          aria-label={text(`在${activeLabel}中新增議題`, `Create issue in ${activeLabel}`)}
+          title={text(`新增到${activeLabel}`, `Add to ${activeLabel}`)}
           onClick={() => onCreate(activeTab)}
         >
-          <TaskboardIcon name="sidebarAdd" />
+          <PlusIcon color="currentColor" size={11} />
         </button>
       )}
 
@@ -272,14 +340,17 @@ export function OtherTasksPanel({
               task={task}
               variant="sidebar"
               presentation={presentations[task.id]}
-              now={now}
               isDragging={draggedTaskId === task.id}
               dragShift={dragShift}
               isMoving={movingTaskId === task.id}
               isSettling={settlingTaskId === task.id}
               isContextMenuOpen={contextMenuTaskId === task.id}
               availableLabels={availableLabels}
+              projectName={projectNames?.[task.projectId]}
               currentUser={currentUser}
+              showCover={showCover}
+              showBody={showBody}
+              onCreateLabel={(label) => onCreateLabel(label, task.projectId)}
               onEdit={onEdit}
               onUpdate={onUpdate}
               onContextMenu={onContextMenu}
@@ -291,16 +362,20 @@ export function OtherTasksPanel({
         })}
         {tasks.length === 0 && (
           <div className="other-tasks-empty">
-            <LinearIcon name={hasActiveFilters ? "search" : archived ? "trash" : "panel"} />
+            {hasActiveFilters
+              ? <LinearIcon name="search" />
+              : archived
+                ? <DeleteIcon color="currentColor" />
+                : <LinearIcon name="panel" />}
             <strong>{hasActiveFilters
-              ? text("当前筛选下无匹配议题", "No issues match the current filters")
-              : text("暂无议题", "No issues")}</strong>
+              ? text("目前篩選下無匹配議題", "No issues match the current filters")
+              : text("暫無議題", "No issues")}</strong>
             <span>
               {hasActiveFilters
-                ? text("搜索和筛选会同步作用于所有状态。", "Search and filters apply to every status.")
+                ? text("搜尋和篩選會同步作用於所有狀態。", "Search and filters apply to every status.")
                 : archived
-                  ? text("没有已归档议题。", "There are no archived issues.")
-                  : text(`没有${activeLabel}。`, `There are no issues in ${activeLabel}.`)}
+                  ? text("沒有已歸檔議題。", "There are no archived issues.")
+                  : text(`沒有${activeLabel}。`, `There are no issues in ${activeLabel}.`)}
             </span>
           </div>
         )}

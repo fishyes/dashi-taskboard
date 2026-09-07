@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { createHmac } from "node:crypto";
 import { access, mkdtemp, readFile, rm } from "node:fs/promises";
 import http from "node:http";
@@ -8,6 +8,8 @@ import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+
+import { CdpPipeBrowser } from "../scripts/codex-cdp-pipe.mjs";
 
 const execFileAsync = promisify(execFile);
 const projectRoot = fileURLToPath(new URL("..", import.meta.url));
@@ -25,7 +27,7 @@ const embeddedHostSource = await readFile(
   new URL("../web/src/embeddedHost.mjs", import.meta.url),
   "utf8",
 );
-const embeddedHostDataUrl = `data:text/javascript;base64,${Buffer.from(embeddedHostSource).toString("base64")}`;
+const embeddedHostClassicSource = embeddedHostSource.replaceAll("export ", "");
 
 async function chromeExecutable() {
   const candidates = [
@@ -68,12 +70,12 @@ function fixtureHtml(origin) {
       <nav role="navigation">
         <div data-app-action-sidebar-scroll>
           <div>
-            <button><span>首页</span></button>
-            <button><span>站点</span></button>
-            <button><svg></svg><span class="text-fade-truncate">插件</span></button>
+            <button><span>首頁</span></button>
+            <button><span>站點</span></button>
+            <button><svg></svg><span class="text-fade-truncate">外掛</span></button>
           </div>
           <section data-app-action-sidebar-section>
-            <div data-app-action-sidebar-section-heading="项目">项目</div>
+            <div data-app-action-sidebar-section-heading="專案">專案</div>
           </section>
         </div>
       </nav>
@@ -125,22 +127,22 @@ function fixtureHtml(origin) {
           const request = event.data.payload;
           if (request.action === "load-frame") {
             const frame = document.querySelector('iframe[name="' + request.frameName + '"]');
-            const moduleUrl = ${JSON.stringify(embeddedHostDataUrl)};
             frame.srcdoc = '<a id="external-link" href="https://example.com/review" target="_blank">Review</a>'
-              + '<script type="module">import * as host from ' + JSON.stringify(moduleUrl) + ';'
-              + 'globalThis.__CODEX_TASKBOARD_FRAME_CAPABILITY__='
+              + '<script>'
+              + ${JSON.stringify(embeddedHostClassicSource)}
+              + '\\nglobalThis.__CODEX_TASKBOARD_FRAME_CAPABILITY__='
               + JSON.stringify(request.frameCapability)
-              + ';host.installEmbeddedExternalLinkHandler();'
+              + ';installEmbeddedExternalLinkHandler();'
               + 'let activated=false,acknowledgedChallenge="";window.addEventListener("message",function(event){'
               + 'if(event.data?.type!=="taskboard:frame-challenge")return;'
               + 'const challenge=event.data.payload?.challenge;if(!challenge||challenge===acknowledgedChallenge)return;'
-              + 'acknowledgedChallenge=challenge;host.setEmbeddedFrameChallenge(challenge);'
-              + 'host.postEmbeddedHostMessage({type:"taskboard:ready"});'
+              + 'acknowledgedChallenge=challenge;setEmbeddedFrameChallenge(challenge);'
+              + 'postEmbeddedHostMessage({type:"taskboard:ready"});'
               + 'if(activated)return;activated=true;'
               + 'parent.postMessage({type:"taskboard:ready"},"*");'
               + 'parent.postMessage({type:"taskboard:open-thread",payload:{threadId:"forged"}},"*");'
               + 'document.getElementById("external-link").click();'
-              + '});host.postEmbeddedHostMessage({type:"taskboard:frame-awaiting-challenge"});<\\/script>';
+              + '});postEmbeddedHostMessage({type:"taskboard:frame-awaiting-challenge"});<\\/script>';
           }
           if (request.action === "open-external") {
             window.__externalOpenUrl = request.url;
@@ -149,6 +151,7 @@ function fixtureHtml(origin) {
             window.__statusHiddenBeforeNavigation = document.getElementById("codex-taskboard-status")?.hidden === true;
             frame?.addEventListener("load", () => {
               window.__hostileNavigationLoaded = true;
+              window.__resolveHostileNavigationLoaded();
             }, { once: true });
             frame.removeAttribute("srcdoc");
             frame.src = ${JSON.stringify(`${origin}/attacker`)};
@@ -187,14 +190,11 @@ function fixtureHtml(origin) {
         const entry = document.getElementById("codex-taskboard-entry");
         const panel = document.querySelector("[data-browser-sidebar-webview]");
         const panelVisibleBefore = getComputedStyle(panel).visibility !== "hidden";
+        const hostileNavigationLoaded = new Promise((resolve) => {
+          window.__resolveHostileNavigationLoaded = resolve;
+        });
         entry?.click();
-
-        for (let attempt = 0; attempt < 500; attempt += 1) {
-          const frame = document.getElementById("codex-taskboard-frame");
-          if (frame && window.__externalOpenUrl && window.__hostileNavigationLoaded) break;
-          await new Promise((resolve) => setTimeout(resolve, 20));
-        }
-        await new Promise((resolve) => setTimeout(resolve, 250));
+        await hostileNavigationLoaded;
 
         const page = document.getElementById("codex-taskboard-page");
         const frame = document.getElementById("codex-taskboard-frame");
@@ -271,32 +271,56 @@ test("Taskboard fills the workspace, opens HTTPS links and revokes hostile ifram
   }));
 
   const profile = await mkdtemp(path.join(os.tmpdir(), "taskboard-fullheight-chrome-"));
-  t.after(() => rm(profile, { recursive: true, force: true }));
+  t.after(() => rm(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 }));
   const url = `http://127.0.0.1:${server.address().port}/fixture`;
-  let stdout;
+  const child = spawn(chrome, [
+    "--headless=new",
+    "--disable-gpu",
+    "--no-sandbox",
+    `--user-data-dir=${profile}`,
+    "--remote-debugging-pipe",
+    "about:blank",
+  ], {
+    stdio: ["ignore", "ignore", "ignore", "pipe", "pipe"],
+  });
+  const browser = new CdpPipeBrowser(child);
+  let session;
+  let encodedResult = "";
   try {
-    ({ stdout } = await execFileAsync(chrome, [
-      "--headless=new",
-      "--disable-gpu",
-      "--no-sandbox",
-      `--user-data-dir=${profile}`,
-      "--virtual-time-budget=12000",
-      "--dump-dom",
-      url,
-    ], { maxBuffer: 5 * 1024 * 1024, timeout: 20_000 }));
-  } catch (error) {
-    if (!String(error?.stdout ?? "").trim()) {
-      t.skip("Chrome or Chromium cannot run headless dump-dom in this environment");
-      return;
+    await browser.open();
+    const target = (await browser.targets()).find(({ type }) => type === "page");
+    assert.ok(target, "Chrome did not expose a page target");
+    session = await browser.connect(target.targetId);
+    await session.send("Page.enable");
+    await session.send("Runtime.enable");
+    const loaded = session.waitFor("Page.loadEventFired", 10_000);
+    await session.send("Page.navigate", { url });
+    await loaded;
+
+    const deadline = Date.now() + 20_000;
+    while (!encodedResult && Date.now() < deadline) {
+      const evaluation = await session.send("Runtime.evaluate", {
+        expression: 'document.getElementById("result")?.textContent || ""',
+        returnByValue: true,
+      });
+      encodedResult = evaluation.result.value;
+      if (!encodedResult) await new Promise((resolve) => setTimeout(resolve, 50));
     }
-    throw error;
-  }
-  if (!stdout.trim()) {
-    t.skip("Chrome or Chromium cannot run headless dump-dom in this environment");
-    return;
+  } finally {
+    session?.close();
+    browser.close();
+    if (child.exitCode === null && child.signalCode === null) {
+      const exited = new Promise((resolve) => child.once("exit", resolve));
+      child.kill("SIGTERM");
+      await Promise.race([
+        exited,
+        new Promise((resolve) => setTimeout(resolve, 2_000)),
+      ]);
+      if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+      await exited;
+    }
   }
 
-  const encodedResult = stdout.match(/<output id="result">([^<]+)<\/output>/)?.[1];
   assert.ok(encodedResult, "fixture did not report an injection result");
   const result = JSON.parse(Buffer.from(encodedResult, "base64").toString("utf8"));
   assert.deepEqual(result, {

@@ -1,27 +1,18 @@
+import { signalProcessTree } from "../shared/process-tree.mjs";
 import { spawnCodexTurn } from "./ai-chat-process.mjs";
-import { ApiError } from "./database.mjs";
+import { ApiError } from "../shared/api-fields.mjs";
 
 const DAY_MS = 24 * 60 * 60 * 1_000;
 const CHECK_INTERVAL_MS = 60 * 60 * 1_000;
 const STATUS_LABELS = {
-  backlog: "积压事项",
-  todo: "待办",
-  in_progress: "处理中",
-  in_review: "等你确认",
-  blocked: "遇到阻碍",
+  backlog: "積壓事項",
+  todo: "待辦",
+  in_progress: "處理中",
+  in_review: "等你確認",
+  blocked: "遇到阻礙",
   done: "完成",
   canceled: "取消",
 };
-
-function signalProcessGroup(child, signal) {
-  if (Number.isInteger(child?.pid)) {
-    try {
-      process.kill(-child.pid, signal);
-      return;
-    } catch {}
-  }
-  child?.kill(signal);
-}
 
 function isDue(summary) {
   if (!summary.attemptedAt) return true;
@@ -33,7 +24,11 @@ function buildPrompt(project, tasks) {
     STATUS_LABELS[status],
     tasks.filter((task) => task.status === status).length,
   ]));
-  const issues = tasks.map((task) => ({
+  const recentCutoff = Date.now() - 7 * DAY_MS;
+  const issues = tasks.filter((task) => (
+    (task.status !== "done" && task.status !== "canceled")
+    || new Date(task.activityUpdatedAt).getTime() >= recentCutoff
+  )).map((task) => ({
     id: task.identifier,
     title: task.title,
     status: STATUS_LABELS[task.status],
@@ -43,8 +38,8 @@ function buildPrompt(project, tasks) {
     updatedAt: task.activityUpdatedAt,
   }));
   return [
-    "你是 Codex。请根据下面的任务面板快照，为项目负责人写一段项目总结。",
-    "要求：只输出一段 60 至 120 字的简体中文；直接说明当前进展、主要风险或阻碍、下一步重点；不要使用标题、列表或 Markdown；不要调用工具。",
+    "你是 Codex。請根據下面的任務面板快照，為專案負責人寫一段專案總結。",
+    "要求：只輸出一段 60 至 120 字的繁體中文；直接說明目前進展、主要風險或阻礙、下一步重點；不要使用標題、列表或 Markdown；不要呼叫工具。",
     JSON.stringify({
       project: project.name,
       generatedForDate: new Date().toISOString().slice(0, 10),
@@ -113,6 +108,7 @@ export class ProjectSummaryService {
           "--json",
           "--color",
           "never",
+          "--skip-git-repo-check",
           "-C",
           this.workspacePath,
           "-s",
@@ -132,16 +128,16 @@ export class ProjectSummaryService {
             generatedSummary = event.item.text.replace(/\s+/g, " ").trim();
           }
           if (event.type === "turn.failed" || event.type === "error") {
-            terminalError = String(event.error?.message ?? event.message ?? "Codex 生成失败");
+            terminalError = String(event.error?.message ?? event.message ?? "Codex 產生失敗");
           }
         },
       });
       active.child = child;
       const result = await completion;
       if (result.exitCode !== 0 || terminalError) {
-        throw new Error(terminalError || `Codex 退出码 ${result.exitCode}`);
+        throw new Error(terminalError || `Codex 退出碼 ${result.exitCode}`);
       }
-      if (!generatedSummary) throw new Error("Codex 没有返回项目总结");
+      if (!generatedSummary) throw new Error("Codex 未回傳專案總結");
       this.database.saveProjectSummary(projectId, generatedSummary);
     } catch (error) {
       if (!this.closed) {
@@ -157,7 +153,7 @@ export class ProjectSummaryService {
     this.closed = true;
     clearInterval(this.timer);
     const active = [...this.active.values()];
-    for (const entry of active) signalProcessGroup(entry.child, "SIGTERM");
+    for (const entry of active) signalProcessTree(entry.child, "SIGTERM");
     await Promise.allSettled(active.map((entry) => entry.promise));
   }
 }

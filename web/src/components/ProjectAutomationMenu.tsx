@@ -1,14 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import {
-  AUTOMATION_MODELS,
-  getAutomationModel,
-  withAutomationModel,
-  type AutomationModel,
-  type AutomationReasoningEffort,
-} from "../../../shared/taskboard-automation-options.mjs";
+import { LinearIcon } from "./LinearIcon";
+import { ProjectIcon, RecurrenceIcon } from "./SemanticIcons";
+import { TaskPropertyPicker } from "./TaskPropertyPicker";
 import { TaskboardIcon } from "./TaskboardIcon";
 import { useTaskboardI18n } from "../i18n";
+import type { AiChatModel } from "../types";
 
 type AutomationStatus = "ACTIVE" | "PAUSED";
 type AutomationQuotaState = "available" | "blocked" | "unknown" | "unavailable";
@@ -18,8 +15,8 @@ interface AutomationOptions {
   enabledByUser: boolean;
   quotaAware: boolean;
   intervalMinutes: IntervalMinutes;
-  model: AutomationModel;
-  reasoningEffort: AutomationReasoningEffort;
+  model: string;
+  reasoningEffort: string;
 }
 
 interface AutomationState extends AutomationOptions {
@@ -34,6 +31,7 @@ interface AutomationState extends AutomationOptions {
 
 interface ProjectAutomationMenuProps {
   automation?: Partial<AutomationState>;
+  models: AiChatModel[];
   pending: boolean;
   error: string | null;
   unavailableReason: string | null;
@@ -41,25 +39,35 @@ interface ProjectAutomationMenuProps {
   onChange: (options: AutomationOptions) => void;
 }
 
-const DEFAULT_OPTIONS: AutomationOptions = {
-  enabledByUser: false,
-  quotaAware: false,
-  intervalMinutes: 5,
-  model: "gpt-5.5",
-  reasoningEffort: "high",
-};
-
-const EFFORT_LABELS: Record<AutomationReasoningEffort, readonly [string, string]> = {
-  low: ["轻度", "Low"],
+const EFFORT_LABELS: Record<string, readonly [string, string]> = {
+  low: ["輕度", "Low"],
   medium: ["中", "Medium"],
   high: ["高", "High"],
-  xhigh: ["极高 (xhigh)", "Extra high (xhigh)"],
+  xhigh: ["極高 (xhigh)", "Extra high (xhigh)"],
   max: ["最高", "Maximum"],
-  ultra: ["极高 (ultra)", "Ultra"],
+  ultra: ["極高 (ultra)", "Ultra"],
 };
+
+function automationOptions(
+  models: AiChatModel[],
+  automation?: Partial<AutomationState>,
+): AutomationOptions {
+  const model = models.find((candidate) => candidate.slug === automation?.model) ?? models[0];
+  const reasoningEffort = model?.supportedReasoningEfforts.includes(automation?.reasoningEffort ?? "")
+    ? automation?.reasoningEffort
+    : model?.defaultReasoningEffort;
+  return {
+    enabledByUser: automation?.enabledByUser ?? false,
+    quotaAware: automation?.quotaAware ?? false,
+    intervalMinutes: automation?.intervalMinutes ?? 5,
+    model: model?.slug ?? "",
+    reasoningEffort: reasoningEffort ?? "",
+  };
+}
 
 export function ProjectAutomationMenu({
   automation,
+  models,
   pending,
   error,
   unavailableReason,
@@ -71,31 +79,37 @@ export function ProjectAutomationMenu({
   const menuRef = useRef<HTMLDivElement>(null);
   const wasPendingRef = useRef(pending);
   const [open, setOpen] = useState(false);
+  const [pickerMenu, setPickerMenu] = useState<"interval" | "model" | "reasoning" | null>(null);
   const [position, setPosition] = useState({ left: 0, top: 0, ready: false });
-  const [draft, setDraft] = useState<AutomationOptions>(DEFAULT_OPTIONS);
+  const [draft, setDraft] = useState<AutomationOptions>(() => automationOptions(models, automation));
   const status = automation?.status ?? "PAUSED";
   const quota = automation?.quota;
   const stateLabel = !automation?.enabledByUser
-    ? text("已暂停", "Paused")
+    ? text("已暫停", "Paused")
     : automation.quotaAware && quota?.state === "blocked"
-      ? text("额度暂停", "Paused by quota")
+      ? text("額度暫停", "Paused by quota")
       : automation.quotaAware && quota?.state === "unavailable"
-        ? text("额度不可用", "Quota unavailable")
+        ? text("額度不可用", "Quota unavailable")
         : automation.quotaAware && (!quota || quota.state === "unknown")
-          ? text("额度未知", "Quota unknown")
+          ? text("額度未知", "Quota unknown")
           : status === "ACTIVE"
-            ? text("运行中", "Running")
-            : text("已暂停", "Paused");
-  const disabled = pending || Boolean(unavailableReason);
+            ? text("執行中", "Running")
+            : text("已暫停", "Paused");
+  const selectedModel = models.find((model) => model.slug === draft.model) ?? models[0];
+  const disabled = pending || !selectedModel || Boolean(unavailableReason);
 
   useEffect(() => {
     if (!open) return;
-    setDraft({ ...DEFAULT_OPTIONS, ...automation });
+    setDraft(automationOptions(models, automation));
+  }, [automation, models, open]);
+
+  useEffect(() => {
+    if (!open) setPickerMenu(null);
   }, [open]);
 
   useEffect(() => {
     if (wasPendingRef.current && !pending) {
-      setDraft({ ...DEFAULT_OPTIONS, ...automation });
+      setDraft(automationOptions(models, automation));
     }
     wasPendingRef.current = pending;
   }, [automation, pending]);
@@ -122,7 +136,7 @@ export function ProjectAutomationMenu({
       setOpen(false);
     }
     function closeFromEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") {
+      if (event.key === "Escape" && !pickerMenu) {
         setOpen(false);
         triggerRef.current?.focus();
       }
@@ -137,7 +151,7 @@ export function ProjectAutomationMenu({
       window.removeEventListener("resize", closeFromViewportChange);
       window.removeEventListener("scroll", closeFromViewportChange, true);
     };
-  }, [open]);
+  }, [open, pickerMenu]);
 
   const submitChange = (next: AutomationOptions) => {
     if (disabled) return;
@@ -150,17 +164,17 @@ export function ProjectAutomationMenu({
       ref={menuRef}
       className="project-automation-menu no-drag"
       role="dialog"
-      aria-label={text("自动认领待办设置", "Auto-claim settings")}
+      aria-label={text("自動認領待辦設定", "Auto-claim settings")}
       style={{ left: position.left, top: position.top, visibility: position.ready ? "visible" : "hidden" }}
     >
       <div className="project-automation-menu-heading">
-        <strong>{text("自动认领待办", "Auto-claim tasks")}</strong>
+        <strong>{text("自動認領待辦", "Auto-claim tasks")}</strong>
         <span className={status === "ACTIVE" ? "is-active" : "is-paused"}>
           {stateLabel}
         </span>
       </div>
       <div className="project-automation-switch">
-        <span>{text("自动认领开关", "Auto-claim")}</span>
+        <span>{text("自動認領開關", "Auto-claim")}</span>
         <button
           type="button"
           className={`board-setting-switch${draft.enabledByUser ? " is-on" : ""}`}
@@ -176,7 +190,7 @@ export function ProjectAutomationMenu({
         </button>
       </div>
       <div className="project-automation-switch">
-        <span>{text("根据额度启用/关闭", "Use quota limits")}</span>
+        <span>{text("根據額度啟用/停用", "Use quota limits")}</span>
         <button
           type="button"
           className={`board-setting-switch${draft.quotaAware ? " is-on" : ""}`}
@@ -193,71 +207,103 @@ export function ProjectAutomationMenu({
       </div>
       {draft.quotaAware && (
         <div className={`project-automation-quota is-${quota?.state ?? "unknown"}`}>
-          {quota?.state === "available" && text("当前额度可用", "Quota is available")}
+          {quota?.state === "available" && text("目前額度可用", "Quota is available")}
           {quota?.state === "blocked" && (
             quota.resetsAt
               ? text(
-                `额度已用尽，预计 ${formatResetTime(quota.resetsAt, locale)} 恢复`,
+                `額度已用盡，預計 ${formatResetTime(quota.resetsAt, locale)} 恢復`,
                 `Quota is exhausted. Expected reset: ${formatResetTime(quota.resetsAt, locale)}.`,
               )
-              : text("额度已用尽，自动认领已暂停", "Quota is exhausted. Auto-claim is paused.")
+              : text("額度已用盡，自動認領已暫停", "Quota is exhausted. Auto-claim is paused.")
           )}
           {quota?.state === "unavailable" && (
             quota.reason === "api-key"
               ? text(
-                "API Key 模式不支持读取 Codex App 额度",
+                "API Key 模式不支援讀取 Codex App 額度",
                 "API key mode cannot read the Codex app quota.",
               )
-              : text("当前账户无法读取额度", "This account cannot read quota information.")
+              : text("目前帳戶無法讀取額度", "This account cannot read quota information.")
           )}
           {(!quota || quota.state === "unknown") && text(
-            "额度状态未知，自动认领已暂停",
+            "額度狀態未知，自動認領已暫停",
             "Quota status is unknown. Auto-claim is paused.",
           )}
         </div>
       )}
-      <label className="project-automation-field">
-        <span>{text("间隔", "Interval")}</span>
-        <select
-          value={draft.intervalMinutes}
+      <div className="project-automation-field">
+        <span>{text("間隔", "Interval")}</span>
+        <TaskPropertyPicker
+          value={String(draft.intervalMinutes)}
+          options={[5, 10, 15, 30, 60].map((minutes) => ({
+            value: String(minutes),
+            label: text(`${minutes} 分鐘`, `${minutes} min`),
+            icon: <RecurrenceIcon color="currentColor" size={14} />,
+          }))}
+          open={pickerMenu === "interval"}
           disabled={disabled}
-          onChange={(event) => submitChange({
+          className="project-automation-picker"
+          triggerClassName="project-automation-picker-trigger"
+          ariaLabel={text("間隔", "Interval")}
+          onOpenChange={(open) => setPickerMenu(open ? "interval" : null)}
+          onChange={(value) => submitChange({
             ...draft,
-            intervalMinutes: Number(event.target.value) as IntervalMinutes,
+            intervalMinutes: Number(value) as IntervalMinutes,
           })}
-        >
-          {[5, 10, 15, 30, 60].map((minutes) => (
-            <option key={minutes} value={minutes}>{text(`${minutes} 分钟`, `${minutes} min`)}</option>
-          ))}
-        </select>
-      </label>
-      <label className="project-automation-field">
-        <span>{text("模型", "Model")}</span>
-        <select
-          value={draft.model}
-          disabled={disabled}
-          onChange={(event) => submitChange(withAutomationModel(draft, event.target.value as AutomationModel))}
-        >
-          {AUTOMATION_MODELS.map((model) => (
-            <option key={model.slug} value={model.slug}>{model.label}</option>
-          ))}
-        </select>
-      </label>
-      <label className="project-automation-field">
-        <span>{text("推理强度", "Reasoning effort")}</span>
-        <select
-          value={draft.reasoningEffort}
-          disabled={disabled}
-          onChange={(event) => submitChange({
-            ...draft,
-            reasoningEffort: event.target.value as AutomationReasoningEffort,
-          })}
-        >
-          {getAutomationModel(draft.model).efforts.map((effort) => (
-            <option key={effort} value={effort}>{text(...EFFORT_LABELS[effort])}</option>
-          ))}
-        </select>
-      </label>
+        />
+      </div>
+      {selectedModel && (
+        <>
+          <div className="project-automation-field">
+            <span>{text("模型", "Model")}</span>
+            <TaskPropertyPicker
+              value={draft.model}
+              options={models.map((model) => ({
+                value: model.slug,
+                label: model.displayName,
+                icon: <ProjectIcon color="currentColor" size={14} />,
+              }))}
+              open={pickerMenu === "model"}
+              disabled={disabled}
+              className="project-automation-picker"
+              triggerClassName="project-automation-picker-trigger"
+              ariaLabel={text("模型", "Model")}
+              onOpenChange={(open) => setPickerMenu(open ? "model" : null)}
+              onChange={(value) => {
+                const model = models.find((candidate) => candidate.slug === value);
+                if (!model) return;
+                submitChange({
+                  ...draft,
+                  model: value,
+                  reasoningEffort: model.supportedReasoningEfforts.includes(draft.reasoningEffort)
+                    ? draft.reasoningEffort
+                    : model.defaultReasoningEffort,
+                });
+              }}
+            />
+          </div>
+          <div className="project-automation-field">
+            <span>{text("推理強度", "Reasoning effort")}</span>
+            <TaskPropertyPicker
+              value={draft.reasoningEffort}
+              options={selectedModel.supportedReasoningEfforts.map((effort) => ({
+                value: effort,
+                label: EFFORT_LABELS[effort] ? text(...EFFORT_LABELS[effort]) : effort,
+                icon: <LinearIcon name="displayOptions" />,
+              }))}
+              open={pickerMenu === "reasoning"}
+              disabled={disabled}
+              className="project-automation-picker"
+              triggerClassName="project-automation-picker-trigger"
+              ariaLabel={text("推理強度", "Reasoning effort")}
+              onOpenChange={(open) => setPickerMenu(open ? "reasoning" : null)}
+              onChange={(value) => submitChange({
+                ...draft,
+                reasoningEffort: value,
+              })}
+            />
+          </div>
+        </>
+      )}
       {unavailableReason && <p className="project-automation-note">{unavailableReason}</p>}
       {error && error !== unavailableReason && <p className="project-automation-error" role="alert">{error}</p>}
     </div>,
@@ -271,14 +317,14 @@ export function ProjectAutomationMenu({
         type="button"
         className={`project-automation-trigger no-drag ${status === "ACTIVE" ? "is-active" : "is-paused"}`}
         aria-label={status === "ACTIVE"
-          ? text("自动认领中", "Auto-claiming")
-          : text("自动化", "Automation")}
+          ? text("自動認領中", "Auto-claiming")
+          : text("自動化", "Automation")}
         aria-busy={pending}
         aria-haspopup="dialog"
         aria-expanded={open}
         title={status === "ACTIVE"
-          ? text("自动认领中", "Auto-claiming")
-          : text("自动化", "Automation")}
+          ? text("自動認領中", "Auto-claiming")
+          : text("自動化", "Automation")}
         onClick={() => {
           if (!open) {
             setPosition((current) => ({ ...current, ready: false }));
@@ -289,8 +335,8 @@ export function ProjectAutomationMenu({
       >
         <TaskboardIcon name={status === "ACTIVE" ? "automationPause" : "automationPlay"} />
         <span>{status === "ACTIVE"
-          ? text("自动认领中", "Auto-claiming")
-          : text("自动化", "Automation")}</span>
+          ? text("自動認領中", "Auto-claiming")
+          : text("自動化", "Automation")}</span>
       </button>
       {menu}
     </>
