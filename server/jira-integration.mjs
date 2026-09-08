@@ -150,6 +150,14 @@ function safeConfig(config, lastSyncedAt = null) {
 export function createJiraIntegration({ configStore, database, fetch: fetchImplementation = globalThis.fetch }) {
   let lastSyncedAt = null;
   let pendingSync = null;
+  let pendingOperation = Promise.resolve();
+
+  function runInOrder(operation) {
+    const result = pendingOperation.then(operation);
+    // 只恢復排程尾端；呼叫端仍會收到原始拒絕。
+    pendingOperation = result.catch(() => {});
+    return result;
+  }
 
   async function request(config, pathname, init = {}) {
     const controller = new AbortController();
@@ -271,16 +279,26 @@ export function createJiraIntegration({ configStore, database, fetch: fetchImple
   }
 
   async function sync({ force = false } = {}) {
-    const config = await configStore.read();
-    if (!config) return safeConfig(null);
-    if (!force && lastSyncedAt && Date.now() - new Date(lastSyncedAt).getTime() < SYNC_INTERVAL_MS) {
-      return safeConfig(config, lastSyncedAt);
+    if (pendingSync) {
+      // 強制同步不可沿用已排程、受節流的空操作。
+      pendingSync.force ||= force;
+      return pendingSync.promise;
     }
-    if (pendingSync) return pendingSync;
-    pendingSync = syncWithConfig(config).finally(() => {
-      pendingSync = null;
+    const syncRequest = { force, promise: null };
+    syncRequest.promise = runInOrder(async () => {
+      try {
+        const config = await configStore.read();
+        if (!config) return safeConfig(null);
+        if (!syncRequest.force && lastSyncedAt && Date.now() - new Date(lastSyncedAt).getTime() < SYNC_INTERVAL_MS) {
+          return safeConfig(config, lastSyncedAt);
+        }
+        return await syncWithConfig(config);
+      } finally {
+        pendingSync = null;
+      }
     });
-    return pendingSync;
+    pendingSync = syncRequest;
+    return syncRequest.promise;
   }
 
   async function resolveTransition(config, issueKey, targetStatus) {
@@ -346,6 +364,7 @@ export function createJiraIntegration({ configStore, database, fetch: fetchImple
       return safeConfig(await configStore.read(), lastSyncedAt);
     },
     async configure(input) {
+      return runInOrder(async () => {
       const current = await configStore.read();
       const username = input.username || current?.username;
       const password = input.password || current?.password;
@@ -386,14 +405,17 @@ export function createJiraIntegration({ configStore, database, fetch: fetchImple
       const savedConfig = await configStore.save(config);
       lastSyncedAt = new Date().toISOString();
       return safeConfig(savedConfig, lastSyncedAt);
+      });
     },
     sync,
     async reconcile() {
-      const config = await configStore.read();
-      if (!config || config.version !== 2) {
-        throw new ApiError(409, "JIRA_NOT_CONFIGURED", "Jira 尚未完成穩定身分設定");
-      }
-      return syncWithConfig(config, { archiveMissing: false });
+      return runInOrder(async () => {
+        const config = await configStore.read();
+        if (!config || config.version !== 2) {
+          throw new ApiError(409, "JIRA_NOT_CONFIGURED", "Jira 尚未完成穩定身分設定");
+        }
+        return syncWithConfig(config, { archiveMissing: false });
+      });
     },
     async updateTask(task, changes) {
       const config = await configStore.read();

@@ -1,13 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use base64::Engine;
 #[cfg(target_os = "macos")]
 use dispatch2::{run_on_main, MainThreadBound};
-use futures_util::{
-    future::{BoxFuture, Shared},
-    FutureExt, StreamExt,
-};
-use minisign_verify::{PublicKey, Signature};
+use futures_util::{future::{BoxFuture, Shared}, FutureExt};
 #[cfg(target_os = "macos")]
 use objc2::{
     define_class, msg_send,
@@ -22,7 +17,6 @@ use objc2_app_kit::{
 };
 #[cfg(target_os = "macos")]
 use objc2_foundation::{NSObject, NSSize, NSString};
-use reqwest::header::{HeaderValue, ACCEPT};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 #[cfg(target_os = "macos")]
@@ -140,6 +134,17 @@ struct LauncherPidRecord {
 #[derive(Deserialize)]
 struct LauncherRuntimeDescriptor {
     url: String,
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "launcherEvent", rename_all = "camelCase")]
+enum LauncherEvent {
+    WaitingForCodex,
+    ServiceReady,
+    OpenSignalReady,
+    OpenSignalQueued,
+    OpenedInExistingCodex,
+    Injected,
 }
 
 struct LauncherState {
@@ -827,13 +832,13 @@ fn resolve_legacy_skill_conflict(
     let proceed = app
         .dialog()
         .message(format!(
-            "检测到旧位置中的 manage-taskboard Skill 与当前 App 内置版本不同，可能包含你的修改。\n\n为避免 Codex 同时发现两个版本，Taskboard 会把旧副本完整保留到：\n\n{}\n\n选择退出不会改动旧副本，也不会启动 Codex。",
+            "偵測到舊位置中的 manage-taskboard Skill 與目前 App 內建版本不同，可能包含你的修改。\n\n為避免 Codex 同時發現兩個版本，Taskboard 會把舊副本完整保留到：\n\n{}\n\n選擇退出不會改動舊副本，也不會啟動 Codex。",
             backup_path.display()
         ))
         .title("Codex Taskboard Skill 冲突")
         .kind(MessageDialogKind::Warning)
         .buttons(MessageDialogButtons::OkCancelCustom(
-            "保留备份并继续".into(),
+            "保留備份並繼續".into(),
             "退出".into(),
         ))
         .blocking_show();
@@ -1002,11 +1007,11 @@ fn install_taskctl_symlink(app: &AppHandle) -> Result<(PathBuf, PathBuf), String
     let wrapper_path = app
         .path()
         .resource_dir()
-        .map_err(|error| format!("无法定位当前 App 资源目录：{error}"))?
+        .map_err(|error| format!("無法定位目前 App 資源目錄：{error}"))?
         .join("bin/taskctl");
     let wrapper_path = fs::canonicalize(&wrapper_path).map_err(|error| {
         format!(
-            "无法定位当前 App 内置命令行工具 {}：{error}",
+            "無法定位目前 App 內建命令列工具 {}：{error}",
             wrapper_path.display()
         )
     })?;
@@ -1024,20 +1029,20 @@ fn install_taskctl_symlink(app: &AppHandle) -> Result<(PathBuf, PathBuf), String
     ));
     std::os::unix::fs::symlink(&wrapper_path, &temporary_path).map_err(|error| {
         format!(
-            "无法在 {} 创建符号链接：{error}",
+            "無法在 {} 建立符號連結：{error}",
             system_path.parent().unwrap().display()
         )
     })?;
     if let Err(error) = fs::rename(&temporary_path, &system_path) {
         let _ = fs::remove_file(&temporary_path);
         return Err(format!(
-            "无法替换系统命令 {}：{error}",
+            "無法取代系統命令 {}：{error}",
             system_path.display()
         ));
     }
 
     let installed_target = fs::read_link(&system_path)
-        .map_err(|error| format!("无法验证系统命令 {}：{error}", system_path.display()))?;
+        .map_err(|error| format!("無法驗證系統命令 {}：{error}", system_path.display()))?;
     if installed_target != wrapper_path {
         return Err(format!(
             "系统命令未指向当前 App：{} -> {}",
@@ -1343,8 +1348,10 @@ fn process_group_is_running(pid: u32) -> bool {
 }
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]
-fn signal_pending_taskboard_open(state: &LauncherState) -> Result<(), String> {
-    let mut snapshot = state.snapshot.lock().unwrap();
+fn signal_pending_taskboard_open(
+    _state: &LauncherState,
+    snapshot: &mut LauncherSnapshot,
+) -> Result<(), String> {
     if !snapshot.open_request_pending {
         return Ok(());
     }
@@ -1359,8 +1366,10 @@ fn signal_pending_taskboard_open(state: &LauncherState) -> Result<(), String> {
 }
 
 #[cfg(target_os = "windows")]
-fn signal_pending_taskboard_open(state: &LauncherState) -> Result<(), String> {
-    let mut snapshot = state.snapshot.lock().unwrap();
+fn signal_pending_taskboard_open(
+    state: &LauncherState,
+    snapshot: &mut LauncherSnapshot,
+) -> Result<(), String> {
     if !snapshot.open_request_pending {
         return Ok(());
     }
@@ -1540,64 +1549,48 @@ fn watch_launcher_output<R: std::io::Read + Send + 'static>(
     thread::spawn(move || {
         for line in BufReader::new(reader).lines().map_while(Result::ok) {
             append_log(&state, &line);
-            if is_stderr && line.contains("Waiting for Codex") {
-                update_snapshot(&app, &state, |snapshot| {
-                    if state.generation.load(Ordering::SeqCst) == generation
-                        && snapshot.child_pid == Some(pid)
-                    {
+            if is_stderr {
+                continue;
+            }
+            let Ok(event) = serde_json::from_str::<LauncherEvent>(&line) else {
+                continue;
+            };
+            update_snapshot(&app, &state, |snapshot| {
+                if state.generation.load(Ordering::SeqCst) != generation
+                    || snapshot.child_pid != Some(pid)
+                {
+                    return;
+                }
+                match event {
+                    LauncherEvent::WaitingForCodex => {
                         snapshot.phase = "starting".into();
                         snapshot.message = "正在等待 Codex 視窗…".into();
                     }
-                });
-            } else if !is_stderr && line.contains("Codex Taskboard listening") {
-                update_snapshot(&app, &state, |snapshot| {
-                    if state.generation.load(Ordering::SeqCst) == generation
-                        && snapshot.child_pid == Some(pid)
-                    {
+                    LauncherEvent::ServiceReady => {
                         snapshot.phase = "starting".into();
                         snapshot.message = "任務面板服務已啟動，正在注入 Codex…".into();
                     }
-                });
-            } else if !is_stderr && line.contains("\"openTaskboardSignalReady\":true") {
-                let snapshot = update_snapshot(&app, &state, |snapshot| {
-                    if state.generation.load(Ordering::SeqCst) == generation
-                        && snapshot.child_pid == Some(pid)
-                    {
+                    LauncherEvent::OpenSignalReady => {
                         snapshot.open_signal_pid = Some(pid);
+                        if let Err(error) = signal_pending_taskboard_open(&state, snapshot) {
+                            append_log(&state, &format!("Taskboard open signal failed: {error}"));
+                        }
                     }
-                });
-                if snapshot.child_pid == Some(pid) && snapshot.open_signal_pid == Some(pid) {
-                    if let Err(error) = signal_pending_taskboard_open(&state) {
-                        append_log(&state, &format!("Taskboard open signal failed: {error}"));
+                    LauncherEvent::OpenSignalQueued => {
+                        if snapshot.open_signal_pid == Some(pid) {
+                            snapshot.open_request_pending = false;
+                        }
                     }
-                }
-            } else if !is_stderr && line.contains("\"openTaskboardSignalQueued\":true") {
-                let mut snapshot = state.snapshot.lock().unwrap();
-                if state.generation.load(Ordering::SeqCst) == generation
-                    && snapshot.child_pid == Some(pid)
-                    && snapshot.open_signal_pid == Some(pid)
-                {
-                    snapshot.open_request_pending = false;
-                }
-            } else if !is_stderr && line.contains("\"openedTaskboardInExistingCodex\":true") {
-                update_snapshot(&app, &state, |snapshot| {
-                    if state.generation.load(Ordering::SeqCst) == generation
-                        && snapshot.child_pid == Some(pid)
-                    {
+                    LauncherEvent::OpenedInExistingCodex => {
                         snapshot.phase = "running".into();
                         snapshot.message = "任務面板已在現有 Codex 的瀏覽面板中開啟。".into();
                     }
-                });
-            } else if !is_stderr && line.contains("\"injected\"") {
-                update_snapshot(&app, &state, |snapshot| {
-                    if state.generation.load(Ordering::SeqCst) == generation
-                        && snapshot.child_pid == Some(pid)
-                    {
+                    LauncherEvent::Injected => {
                         snapshot.phase = "running".into();
                         snapshot.message = "任務面板已在 Codex 用戶端中開啟。".into();
                     }
-                });
-            }
+                }
+            });
         }
     });
 }
@@ -1945,8 +1938,9 @@ fn restart_launcher(
 }
 
 fn open_taskboard(state: &LauncherState) -> Result<(), String> {
-    state.snapshot.lock().unwrap().open_request_pending = true;
-    signal_pending_taskboard_open(state)
+    let mut snapshot = state.snapshot.lock().unwrap();
+    snapshot.open_request_pending = true;
+    signal_pending_taskboard_open(state, &mut snapshot)
 }
 
 fn open_taskboard_in_browser(state: &LauncherState) -> Result<(), String> {
@@ -2035,96 +2029,6 @@ async fn check_for_startup_update(
     Ok(update)
 }
 
-async fn download_update<C: FnMut(usize, Option<u64>), D: FnOnce()>(
-    app: &AppHandle,
-    update: &Update,
-    cancel_requested: &AtomicBool,
-    mut on_chunk: C,
-    on_download_finish: D,
-) -> Result<Option<Vec<u8>>, String> {
-    let pubkey = app
-        .config()
-        .plugins
-        .0
-        .get("updater")
-        .and_then(|value| value.get("pubkey"))
-        .and_then(serde_json::Value::as_str)
-        .ok_or("Updater public key is unavailable")?;
-    let mut headers = update.headers.clone();
-    if !headers.contains_key(ACCEPT) {
-        headers.insert(ACCEPT, HeaderValue::from_static("application/octet-stream"));
-    }
-    let mut request = reqwest::Client::builder().user_agent("tauri-plugin-updater/2.10.1");
-    if let Some(timeout) = update.timeout {
-        request = request.timeout(timeout);
-    }
-    if update.no_proxy {
-        request = request.no_proxy();
-    } else if let Some(proxy) = &update.proxy {
-        request =
-            request.proxy(reqwest::Proxy::all(proxy.as_str()).map_err(|error| error.to_string())?);
-    }
-    let response = request
-        .build()
-        .map_err(|error| error.to_string())?
-        .get(update.download_url.clone())
-        .headers(headers)
-        .send()
-        .await
-        .map_err(|error| error.to_string())?;
-    if !response.status().is_success() {
-        return Err(format!(
-            "Download request failed with status: {}",
-            response.status()
-        ));
-    }
-    let content_length = response
-        .headers()
-        .get("Content-Length")
-        .and_then(|value| value.to_str().ok())
-        .and_then(|value| value.parse().ok());
-    let mut buffer = Vec::new();
-    let mut stream = response.bytes_stream();
-    loop {
-        if cancel_requested.load(Ordering::SeqCst) {
-            return Ok(None);
-        }
-        let Some(chunk) = stream.next().await else {
-            break;
-        };
-        let chunk = chunk.map_err(|error| error.to_string())?;
-        if cancel_requested.load(Ordering::SeqCst) {
-            return Ok(None);
-        }
-        on_chunk(chunk.len(), content_length);
-        if cancel_requested.load(Ordering::SeqCst) {
-            return Ok(None);
-        }
-        buffer.extend_from_slice(&chunk);
-    }
-    if cancel_requested.load(Ordering::SeqCst) {
-        return Ok(None);
-    }
-    on_download_finish();
-    if cancel_requested.load(Ordering::SeqCst) {
-        return Ok(None);
-    }
-    let pubkey = base64::engine::general_purpose::STANDARD
-        .decode(pubkey)
-        .map_err(|error| error.to_string())?;
-    let pubkey = std::str::from_utf8(&pubkey).map_err(|error| error.to_string())?;
-    let pubkey = PublicKey::decode(pubkey).map_err(|error| error.to_string())?;
-    let signature = base64::engine::general_purpose::STANDARD
-        .decode(&update.signature)
-        .map_err(|error| error.to_string())?;
-    let signature = std::str::from_utf8(&signature).map_err(|error| error.to_string())?;
-    let signature = Signature::decode(signature).map_err(|error| error.to_string())?;
-    pubkey
-        .verify(&buffer, &signature, true)
-        .map_err(|error| error.to_string())?;
-    Ok(Some(buffer))
-}
-
 async fn prepare_update(
     app: &AppHandle,
     state: &Arc<LauncherState>,
@@ -2140,7 +2044,6 @@ async fn prepare_update(
         snapshot.update_message = format!("正在下載 {update_version}…");
         snapshot.update_available = true;
     });
-    let cancel_requested = AtomicBool::new(false);
     let progress_app = app.clone();
     let progress_state = Arc::clone(state);
     let progress_version = update_version.clone();
@@ -2150,10 +2053,7 @@ async fn prepare_update(
     let finish_dialog = Arc::clone(dialog);
     let mut downloaded = 0_u64;
     let mut displayed_progress = None;
-    let bytes = download_update(
-        app,
-        update,
-        &cancel_requested,
+    let bytes = update.download(
         move |chunk_length, content_length| {
             downloaded = downloaded.saturating_add(chunk_length as u64);
             let progress = content_length.filter(|total| *total > 0).map(|total| {
@@ -2187,8 +2087,8 @@ async fn prepare_update(
             }
         },
     )
-    .await?
-    .ok_or_else(|| "Update download was cancelled".to_string())?;
+    .await
+    .map_err(|error| error.to_string())?;
 
     append_log(
         state,
@@ -2760,7 +2660,7 @@ fn main() {
                             show_error_dialog(
                                 &app_handle,
                                 "Codex Taskboard Skill 更新失败",
-                                &format!("无法保留旧 Skill：{error}"),
+                                &format!("無法保留舊 Skill：{error}"),
                             );
                             app_handle.exit(1);
                             return;
